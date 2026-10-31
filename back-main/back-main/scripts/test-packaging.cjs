@@ -1,0 +1,32 @@
+require('dotenv').config();process.env.TELEGRAM_ENABLED='false';
+const assert=require('assert/strict'),{Client}=require('pg'),database='cond_packaging_test_'+Date.now();
+const owner=new Client({host:process.env.DB_HOST,port:process.env.DB_PORT,user:process.env.DB_USER,password:process.env.DB_PASSWORD,database:'postgres'});let db,created=false,n=0;const check=(v,label)=>{assert.ok(v,label);n++;console.log('PASS '+label);},near=(a,b)=>Math.abs(Number(a)-Number(b))<.001;
+async function main(){
+ await owner.connect();await owner.query('CREATE DATABASE "'+database+'"');created=true;delete process.env.DATABASE_URL;Object.assign(process.env,{DB_NAME:database,LOCAL_DEMO:'true',PUBLIC_DEMO:'false'});
+ const M=require('../src/models/operations'),{User,Product}=require('../src/models/models');db=require('../src/database/sequelize');await db.sync();await require('../src/database/seedLocal')();
+ const ops=require('../src/services/operationsService'),pack=require('../src/services/packagingService'),edit=require('../src/services/catalogAdminService');const users=await User.findAll(),admin=users.find(u=>u.role==='super_admin').toJSON(),worker=users.find(u=>u.role==='employee').toJSON(),rep=users.find(u=>u.role==='representative').toJSON(),date='2026-10-29';
+ const source=await ops.material(admin,{name:'Подлиза с орехом · на вес',unit:'кг'}),bag=await ops.material(admin,{name:'Пакет фасовки',unit:'шт'});
+ await ops.receipt(admin,{supplier:'Демо · печенье',document:'BULK',date,lines:[{materialId:source.id,quantity:100,unitCost:500},{materialId:bag.id,quantity:100,unitCost:20}]});
+ const variants=await pack.create(admin,{sourceId:source.id,variants:[1,1.5,2,2.5,3].map(kgPerPack=>({kgPerPack,laborPerPack:10,overheadPerPack:5,salePerKg:1000,lines:[{materialId:bag.id,quantity:1}]}))});
+ check(variants.length===5&&await M.PackagingVariant.count()===5,'One bulk source creates five linked sale variants with separate stocks');
+ const p=variants[3],recipe=await M.Recipe.findOne({where:{productId:p.id}});check(near(recipe.outputKg,2.5)&&near(recipe.lines.find(l=>l.materialId===source.id).quantity,2.5),'2.5kg package has an explicit recipe consuming 2.5kg bulk');
+ const awkward=await ops.preview(admin,{productId:variants[4].id,kg:30});check(near(awkward.laborCost,100),'3kg pack preserves exactly 10 per pack even when per-kg rate is repeating');
+ let calc=await ops.preview(admin,{productId:p.id,kg:25});check(near(calc.totalCost,12850)&&near(calc.laborCost,100),'10×2.5kg cost is 12500 bulk + 200 bags + 100 labor + 50 overhead');
+ const output=await ops.production(worker,{productId:p.id,packages:10,date});check(near(output.kg,25)&&near((await M.Material.findByPk(source.id)).quantity,100),'Worker enters 10 packs; draft does not consume bulk');
+ const run=await M.PackagingRun.findByPk(output.id);check(run.packages===10&&near(run.kgPerPack,2.5),'Production preserves count, size and source');
+ await ops.postProduction(admin,output.id);check(near((await M.Material.findByPk(source.id)).quantity,75)&&near((await M.Material.findByPk(bag.id)).quantity,90),'Posting consumes exactly 25kg and 10 bags once');
+ const stock=await M.Stock.findByPk(p.id),value=await M.StockValue.findByPk(p.id);check(near(stock.kg,25)&&near(value.value,12850),'Posting creates 10 finished packages at saved total cost 12850');
+ const order=await ops.order(admin,{company:'Демо · магазин',deliveryDate:date,lines:[{productId:p.id,kg:5}]});await ops.orderStatus(admin,order.id,{status:'approved',prices:[1000]});await ops.orderStatus(admin,order.id,{status:'shipped'});
+ check(near((await M.Material.findByPk(source.id)).quantity,75)&&near((await M.Material.findByPk(bag.id)).quantity,90),'Selling finished packages never consumes source or bags again');
+ check(near((await M.CostEvent.findByPk(`shipment:${order.id}:${p.id}`)).value,2570),'Two sold packs fix cost 2570');
+ await assert.rejects(()=>ops.postProduction(admin,output.id));check(near((await M.Material.findByPk(source.id)).quantity,75),'Repeated posting cannot consume bulk twice');
+ await assert.rejects(()=>ops.production(worker,{productId:p.id,packages:1.5,date}));await assert.rejects(()=>ops.production(worker,{productId:p.id,packages:2,kg:1,date}));await assert.rejects(()=>ops.order(admin,{company:'Тест',deliveryDate:date,lines:[{productId:p.id,kg:1}]}));check(true,'Fractional packs, conflicting mass and partial-pack sales are rejected');
+ await assert.rejects(()=>edit.product(admin,p.id,{name:p.name,weight:3,priceForEmployee:0}));await assert.rejects(()=>ops.recipe(admin,{productId:p.id,outputKg:2.5,overhead:0,lines:[{materialId:bag.id,quantity:1}]}));check(true,'Generic editors cannot change pack size or remove mandatory bulk consumption');
+ const before=await Product.count();await assert.rejects(()=>pack.create(admin,{sourceId:source.id,variants:[{kgPerPack:4},{kgPerPack:2.5}]}));check(await Product.count()===before,'Duplicate variant rolls back all products and recipes in the batch');
+ for(const u of [worker,rep])await assert.rejects(()=>pack.create(u,{sourceId:source.id,variants:[{kgPerPack:4}]}));check(true,'Only administrator configures packaging');
+ const tooMuch=await ops.production(worker,{productId:p.id,packages:100,date});await assert.rejects(()=>ops.postProduction(admin,tooMuch.id));check(near((await M.Material.findByPk(source.id)).quantity,75),'Insufficient source blocks complete posting without partial consumption');
+ const view=await ops.dashboard(worker);check(near(view.products.find(x=>x.id===p.id).packKg,2.5)&&view.packagingRuns.every(r=>view.productions.some(p=>p.id===r.productionId)),'Worker receives pack sizes and only own packaging records');
+ const recon=await require('../src/services/reconciliationService')(admin);check(recon.ok,'Packaging preserves material, stock, salary and valuation reconciliation: '+recon.issues.join('; '));
+ console.log(n+' packaging checks passed in isolated database '+database);
+}
+main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(db)await db.close();if(created)await owner.query('DROP DATABASE "'+database+'" WITH (FORCE)');await owner.end();});

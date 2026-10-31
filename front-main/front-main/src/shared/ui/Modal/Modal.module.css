@@ -1,0 +1,81 @@
+.Modal {
+    width: 90%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    background: #FFFFFF;
+    border: 1.2px solid rgba(41, 45, 50, 0.08);
+    box-shadow: 0px 4px 20px rgba(69, 88, 111, 0.05), 2px 4px 80px rgba(69, 88, 111, 0.12);
+    border-radius: 12px;
+
+    z-index: 1111;
+    padding: 20px;
+    max-height: 90%;
+
+    overflow: auto;
+}
+
+.Modal__nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: rgba(17, 17, 26, 0.1) 0px 1px 0px;
+}
+
+.Modal__content {
+    height: 100%;
+    overflow: auto;
+}
+.Modal__close {
+    cursor: pointer;
+}
+.overlay {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    background: rgba(30, 38, 47, 0.4);
+    backdrop-filter: blur(2px);
+    z-index: 111;
+    overflow: hidden;
+}
+
+
+
+:root {
+    --scrollbarBgColor: rgba(0, 0, 0, .05);
+    --scrollbarThumbColor: rgba(0, 0, 0, .15);
+    --scrollbarThumbColorSecond: rgba(255, 255, 255, .7);
+    --scrollbarWidth: 2rem;
+    --scrollbarBorder: 0 solid var(--scrollbarBgColor);
+    --scrollbarBorderRadius: calc(var(--scrollbarWidth) / 4);
+}
+.Modal::-webkit-scrollbar-track
+{
+    -webkit-box-shadow: inset 0 0 0 rgba(0,0,0,0.3);
+    border-radius: 0;
+    background-color: #F5F5F5;
+}
+
+.Modal::-webkit-scrollbar
+{
+    width: 8px;
+    background-color: #F5F5F5;
+}
+
+.Modal::-webkit-scrollbar-thumb
+{
+    border-radius: 5px;
+    /*-webkit-box-shadow: inset 0 0 6px #003c94;*/
+    background-color: #a8a8a8;
+}
+
+
+@media (min-width:575px){
+    .Modal {
+        max-width: 80% !important;
+    }
+}

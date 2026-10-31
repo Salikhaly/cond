@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');
+const {salesSeries,chartPoints,actionCommands}=require('../src/operations/studioMetrics');
+let checks=0;function test(name,fn){fn();checks++;console.log('PASS '+name);}
+test('Daily sales include empty dates and net returns in cents',()=>assert.deepEqual(salesSeries([{date:'2026-10-01',revenue:100.1},{date:'2026-10-01',revenue:20.2},{date:'2026-10-03',revenue:-30},{date:'2026-09-30',revenue:999}], '2026-10-01','2026-10-03'),[{date:'2026-10-01',value:120.3},{date:'2026-10-02',value:0},{date:'2026-10-03',value:-30}]));
+test('Long periods aggregate actual rows into months including empty ones',()=>assert.deepEqual(salesSeries([{date:'2026-01-31',revenue:50},{date:'2026-03-15',revenue:75}],'2026-01-31','2026-04-05'),[{date:'2026-01',value:50},{date:'2026-02',value:0},{date:'2026-03',value:75},{date:'2026-04',value:0}]));
+test('No transactions produce a flat zero series, not invented growth',()=>assert.ok(salesSeries([],'2026-10-01','2026-10-05').every(p=>p.value===0)));
+test('Invalid and reversed ranges produce no chart data',()=>{assert.deepEqual(salesSeries([],'invalid','2026-10-03'),[]);assert.deepEqual(salesSeries([],'2026-10-03','2026-10-01'),[]);});
+test('Chart supports negative returns and constant single-day sales',()=>{for(const series of [[{value:0}],[{value:100}],[{value:-100},{value:200}],[]]){const c=chartPoints(series);assert.ok(Number.isFinite(c.baseline));assert.ok(c.points.every(p=>p.x>=8&&p.x<=292&&p.y>=8&&p.y<=60));}});
+const nav=[['expenses','','Расходы'],['materials','','Приходы и склад'],['orders','','Заявки'],['payroll','','Зарплата'],['money','','Деньги']];
+test('Search uses Russian aliases and existing section routes',()=>{assert.equal(actionCommands(nav,{},'зп').sections[0].section,'payroll');assert.equal(actionCommands(nav,{},'каспи').sections[0].section,'money');assert.equal(actionCommands(nav,{},'заявка').quick[0].intent.kind,'catalog');});
+test('Material search carries the selected name and real stock',()=>{const result=actionCommands(nav,{materials:[{id:1,name:'Мука',quantity:42.5,unit:'кг'}]},'мука');assert.equal(result.materials[0].hint,'42.5 кг на складе');assert.deepEqual(result.materials[0].intent,{kind:'search',query:'Мука'});});
+test('Worker search never exposes hidden materials, money or expenses',()=>{const worker=[['production','','Производство'],['payroll','','Моя зарплата']];const result=actionCommands(worker,{materials:[{id:1,name:'Мука',quantity:50,unit:'кг'}]},'');assert.deepEqual(result.quick.map(a=>a.section),['production']);assert.ok(result.sections.every(a=>['production','payroll'].includes(a.section)));assert.equal(actionCommands(worker,{materials:[{name:'Мука'}]},'мука').materials.length,0);});
+test('Unknown search stays empty rather than navigating to a wrong section',()=>assert.deepEqual(actionCommands(nav,{},'неизвестный товар'),{quick:[],sections:[],materials:[]}));
+console.log(checks+' studio checks passed');

@@ -1,0 +1,13 @@
+const {expenseMetrics}=require('./expenseMetrics'),{financialMetrics}=require('./financialMetrics');
+function fullCostMetrics(data,from,to,selected={}){
+ const monthEnd=m=>{const d=new Date(m+'-01T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+1);d.setUTCDate(0);return d.toISOString().slice(0,10);};
+ const inside=date=>(!from||date>=from)&&(!to||date<=to),productions=(data.productions||[]).filter(p=>p.status==='posted'&&inside(p.date));
+ const kg=productions.reduce((s,p)=>s+Number(p.kg),0),expenses=expenseMetrics(data,from,to),finance=financialMetrics(data,from,to);
+ const groups=Object.fromEntries(['electricity','water','business'].map(key=>{const rows=expenses.rows.filter(r=>r.kind==='operating'&&r.costGroup===key);return [key,{amount:rows.reduce((s,r)=>s+Number(r.totalAmount),0)+(key==='business'?finance.payrollOperating+(data.wageAdjustments||[]).filter(a=>inside(a.date)).reduce((s,a)=>s+Number(a.amount),0):0),records:rows.length+(key==='business'?(data.dailyPay||[]).filter(d=>inside(d.date)).length+(data.repAccruals||[]).filter(a=>inside(monthEnd(a.month))).length+(data.wageAdjustments||[]).filter(a=>inside(a.date)).length:0)}];}));
+ const active=Object.keys(groups).filter(key=>selected[key]),amount=active.reduce((s,key)=>s+groups[key].amount,0),missing=active.filter(key=>groups[key].records===0),unknown=selected.business?(expenses.unknown.length+finance.payrollUnallocated.length+finance.payrollPending.length):0;
+ const ready=kg>0&&!missing.length&&!unknown,actual=active.length>0,allocatedPerKg=kg?amount/kg:null,by=new Map();
+ for(const p of productions){const row=by.get(p.productId)||{productId:p.productId,kg:0,material:0,labor:0,plannedOverhead:0};row.kg+=Number(p.kg);row.material+=Number(p.materialCost);row.labor+=Number(p.laborCost);row.plannedOverhead+=Number(p.overheadCost);by.set(p.productId,row);}
+ const rows=[...by.values()].map(r=>{const raw=[...(data.products||[]),...(data.archivedProducts||[])].find(p=>p.id===r.productId),product=raw?{...raw,packKg:raw.packKg??(data.packagingVariants||[]).find(v=>v.productId===raw.id)?.kgPerPack}:null,base=(r.material+r.labor)/r.kg,recipeCost=(r.material+r.labor+r.plannedOverhead)/r.kg,fullCost=actual?(ready?base+allocatedPerKg:null):recipeCost;return {...r,name:product?.name||'Товар',packKg:Number(product?.packKg||0),salePrice:product?.salePrice==null?null:Number(product.salePrice),base,recipeCost,plannedOverheadPerKg:r.plannedOverhead/r.kg,fullCost,fullPerPack:fullCost==null||!product?.packKg?null:fullCost*Number(product.packKg)};}).sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+ return {kg,groups,active,amount,allocatedPerKg,missing,unknown,ready,actual,rows,personal:expenses.personal};
+}
+module.exports={fullCostMetrics};

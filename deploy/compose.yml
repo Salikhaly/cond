@@ -1,0 +1,86 @@
+name: cond
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cond_prod
+      POSTGRES_USER: cond_owner
+      POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?Set POSTGRES_OWNER_PASSWORD}
+      APP_DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - database:/var/lib/postgresql
+      - ./init-app-db.sh:/docker-entrypoint-initdb.d/10-app.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U cond_owner -d cond_prod']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: &logging
+      driver: json-file
+      options: {max-size: '10m', max-file: '3'}
+  backend:
+    build: ../back-main/back-main
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      LOCAL_DEMO: 'false'
+      HOST: 0.0.0.0
+      PORT: 3000
+      TRUST_PROXY: 2
+      CLIENT_URL: https://${SITE_DOMAIN:?Set SITE_DOMAIN}
+      API_URL: https://${SITE_DOMAIN}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: cond_prod
+      DB_USER: cond_app
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+      SMTP_HOST: ${SMTP_HOST:?Set SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:?Set SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD}
+      SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:?Set SUPERADMIN_EMAILS}
+      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD:?Set SUPERADMIN_PASSWORD}
+      SYNC_ROLE: local
+      SQL_LOG: 'false'
+      TELEGRAM_ENABLED: ${TELEGRAM_ENABLED:-false}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_GROUP_ID: ${TELEGRAM_GROUP_ID:-}
+      TELEGRAM_APP_URL: https://${SITE_DOMAIN}
+      TELEGRAM_REMINDER_HOURS: ${TELEGRAM_REMINDER_HOURS:-9,17}
+    volumes: [uploads:/app/src/uploads]
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *logging
+  frontend:
+    build: ../front-main/front-main
+    restart: unless-stopped
+    depends_on:
+      backend: {condition: service_healthy}
+    logging: *logging
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Set SITE_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - tls_data:/data
+      - tls_config:/config
+    depends_on: [frontend]
+    logging: *logging
+volumes:
+  database:
+  uploads:
+  tls_data:
+  tls_config:

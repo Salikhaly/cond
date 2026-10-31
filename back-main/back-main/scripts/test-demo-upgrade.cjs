@@ -1,0 +1,20 @@
+require('dotenv').config();
+const assert=require('node:assert/strict'),{Client}=require('pg'),http=require('http'),{randomBytes}=require('crypto');
+const database='cond_upgrade_test_'+Date.now(),owner=new Client({host:process.env.DB_HOST,port:process.env.DB_PORT,user:process.env.DB_USER,password:process.env.DB_PASSWORD,database:'postgres'});let db,server,created=false,n=0;
+const check=(value,message)=>{assert.ok(value,message);n++;console.log('PASS '+message);};
+(async()=>{
+ await owner.connect();await owner.query('CREATE DATABASE "'+database+'"');created=true;delete process.env.DATABASE_URL;
+ Object.assign(process.env,{DB_NAME:database,PUBLIC_DEMO:'true',LOCAL_DEMO:'true',ALLOW_LOCAL_PUBLIC_DEMO_TEST:'true',CLIENT_URL:'http://127.0.0.1',SECRET_KEY:randomBytes(48).toString('hex'),TELEGRAM_ENABLED:'false',SYNC_AUTO:'false'});
+ db=require('../src/database/sequelize');const M=require('../src/models/operations'),{User,Salary,Income}=require('../src/models/models');require('../src/app');await db.sync();await require('../src/database/seedPublicDemo')();
+ const snapshot=async()=>JSON.stringify({stocks:await M.Stock.findAll({raw:true,order:[['productId','ASC']]}),materials:await M.Material.findAll({raw:true,order:[['id','ASC']]}),payroll:await Salary.findAll({raw:true,order:[['id','ASC']]}),sales:await Income.count(),orders:await M.Order.count()});
+ const before=await snapshot();
+ await db.query('ALTER TABLE expense_meta DROP COLUMN "costGroup"');await db.query('ALTER TABLE work_profiles DROP COLUMN photo, DROP COLUMN instagram, DROP COLUMN note');await db.query('ALTER TABLE work_policies DROP COLUMN "pieceRates"');
+ server=http.createServer(require('../src/publicDemo'));await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const base='http://127.0.0.1:'+server.address().port;
+ const health=await fetch(base+'/api/health');check(health.ok,'Public runtime upgrades an existing ready demo with older columns');
+ check(await snapshot()===before,'Upgrade preserves stocks, materials, payroll, sales and orders without reseeding');
+ await M.ExpenseMeta.findAll();await M.WorkProfile.findAll();await M.WorkPolicy.findAll();check(true,'Added expense groups, staff profile and personal piece rates are queryable');
+ const login=await fetch(base+'/api/operations/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'admin@demo.test',password:'CondDemo2026!'})}),token=(await login.json()).accessToken;
+ const dashboard=await fetch(base+'/api/operations/dashboard',{headers:{Authorization:'Bearer '+token}}),data=await dashboard.json();check(dashboard.ok&&data.isOwner&&data.products.length===2&&Array.isArray(data.workDays),'Owner dashboard loads after in-place schema upgrade');
+ const recon=await fetch(base+'/api/operations/reconciliation',{headers:{Authorization:'Bearer '+token}}),result=await recon.json();check(result.ok,'Upgraded ledgers reconcile: '+(result.issues||[]).join('; '));
+ await fetch(base+'/api/health');check(await snapshot()===before,'Repeated cold readiness does not duplicate data');console.log(n+' non-destructive demo upgrade checks passed');
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(server)await new Promise(r=>server.close(r));if(db)await db.close();if(created)await owner.query('DROP DATABASE "'+database+'" WITH (FORCE)');await owner.end();});

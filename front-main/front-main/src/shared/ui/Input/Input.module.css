@@ -1,0 +1,76 @@
+.Input {
+    width: 100%;
+    padding: 11px 10px;
+    border: 1px solid rgba(30, 38, 47, 0.2);
+    box-shadow: 2px 4px 4px rgba(30, 38, 47, 0.02);
+    font-size: 15px;
+    outline-color: #1E262F;
+    background-color: #fff;
+    /*margin-bottom: 10px;*/
+}
+.Input::placeholder { /* Most modern browsers support this now. */
+    color: rgba(53, 53, 53, 0.5);
+    font-weight: 500;
+}
+.Input:disabled {
+    background-color: #f5f5f5;
+}
+.input-icon {
+    position: absolute;
+    top: 47%;
+    transform: translate(0, -50%);
+    right: 6px;
+    cursor: pointer;
+
+}
+.input-icon svg {
+    transform: scale(.5);
+    fill: #282C2E;
+}
+
+.input-wrapper {
+    width: 100%;
+    position: relative;
+}
+
+.input--icon {
+    padding-left: 40px !important;
+}
+
+.input-icon--first {
+    top: 50%;
+    transform: translate(0, -50%);
+    left: 10px;
+    right: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.input-icon--first svg {
+    transform: scale(1);
+    fill: grey;
+}
+
+.input-wrapper:focus-within .input-icon--first svg path {
+    fill: #282C2E !important;
+}
+
+.input-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translate(0, -45%);
+}
+
+.input-clear svg {
+    transform: scale(.65);
+}
+
+
+@media (mIN-width:768px){
+    .Input {
+        /*padding: 16px 20px;*/
+    }
+}
+
+

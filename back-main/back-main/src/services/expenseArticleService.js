@@ -1,0 +1,28 @@
+const M=require('../models/operations'),db=require('../database/sequelize'),ApiError=require('../exceptions/ApiError');
+const icons=['expense','car','truck','bolt','water','home','phone','box','tools','team','heart','food'];
+const stable=s=>{let h=require('crypto').createHash('sha256').update('cond-article:'+s).digest('hex');return h.slice(0,8)+'-'+h.slice(8,12)+'-4'+h.slice(13,16)+'-a'+h.slice(17,20)+'-'+h.slice(20,32);};
+const defaults=[['Машина','car',['Бензин','Газ','Запчасти','Ремонт','Мойка']],['Доставка','truck',[]],['Вода и коммунальные услуги','bolt',['Электричество','Вода','Отопление']],['Связь и интернет','phone',['Связь','Интернет']],['Аренда','home',[]],['Прочие расходы','expense',[]],['Оборудование','tools',[]],['Личные расходы','heart',['Дом','Семья','Покупки']]];
+const norm=s=>s.trim().replace(/\s+/g,' ').toLocaleLowerCase('ru');
+const admin=u=>{if(u.role!=='super_admin')throw ApiError.forbiddenRequest();};
+async function ensure(t){
+ for(const [name,icon,subs]of defaults){const id=stable(name),kind=name==='Личные расходы'?'owner':name==='Оборудование'?'asset':'operating';await M.ExpenseArticle.findOrCreate({where:{id},defaults:{name,icon,kind},transaction:t});for(const sub of subs)await M.ExpenseArticle.findOrCreate({where:{id:stable(name+'/'+sub)},defaults:{name:sub,parentId:id,icon:sub==='Вода'?'water':icon,kind,costGroup:sub==='Вода'?'water':sub==='Электричество'?'electricity':'business'},transaction:t});}
+ const metas=await M.ExpenseMeta.findAll({transaction:t}),cats=await require('../models/models').OutcomeCategory.findAll({transaction:t});
+ for(const name of new Set([...cats.map(c=>c.name),...metas.map(m=>m.category)].filter(Boolean))){const existing=await M.ExpenseArticle.findAll({where:{parentId:null},transaction:t});if(!existing.some(a=>a.name===name)){await M.ExpenseArticle.findOrCreate({where:{id:stable(name)},defaults:{name,kind:metas.find(m=>m.category===name)?.kind==='owner'?'owner':'operating',active:!/(зарплат|закупка сырья|возврат покупателю)/i.test(name),review:existing.some(a=>norm(a.name)===norm(name))},transaction:t});}}
+ for(const m of metas.filter(m=>m.subcategory)){const p=await M.ExpenseArticle.findOne({where:{name:m.category,parentId:null},transaction:t});if(p)await M.ExpenseArticle.findOrCreate({where:{id:stable(m.category+'/'+m.subcategory)},defaults:{parentId:p.id,name:m.subcategory,kind:m.kind,costGroup:m.costGroup||'business'},transaction:t});}
+}
+async function list(u){admin(u);return M.ExpenseArticle.findAll({order:[['name','ASC']]});}
+async function save(u,id,b){admin(u);return db.transaction(async t=>{
+ await db.query('SELECT pg_advisory_xact_lock(42810301)',{transaction:t});
+ const row=id?await M.ExpenseArticle.findByPk(id,{transaction:t,lock:t.LOCK.UPDATE}):null;if(id&&!row)throw ApiError.notFound('Статья не найдена');
+ if(typeof b.name!=='string'||!b.name.trim()||b.name.length>150)throw ApiError.badRequest('Укажите название статьи');
+ const parentId=row?row.parentId:b.parentId||null,parent=parentId?await M.ExpenseArticle.findByPk(parentId,{transaction:t}):null;if(parentId&&(!parent||parent.parentId||!parent.active))throw ApiError.badRequest('Выберите действующую категорию');
+ const kind=b.kind??row?.kind??parent?.kind??'operating',costGroup=b.costGroup??row?.costGroup??parent?.costGroup??'business',icon=b.icon??row?.icon??parent?.icon??'expense';
+ if(!['operating','asset','owner'].includes(kind)||!['electricity','water','business'].includes(costGroup)||!icons.includes(icon)||b.active!==undefined&&typeof b.active!=='boolean')throw ApiError.badRequest('Проверьте настройки статьи');
+ if(parent&&((parent.kind==='owner')!==(kind==='owner')))throw ApiError.badRequest('Личные статьи должны быть в личной категории');
+ const siblings=await M.ExpenseArticle.findAll({where:{parentId},transaction:t});if(siblings.some(a=>a.id!==id&&norm(a.name)===norm(b.name)))throw ApiError.badRequest('Такая статья уже есть, проверьте также архив');
+ const value={name:b.name.trim(),kind,costGroup,icon,active:b.active??row?.active??true,review:false};
+ if(row){if(!parentId&&(kind==='owner')!==(row.kind==='owner')&&await M.ExpenseArticle.count({where:{parentId:id},transaction:t}))throw ApiError.badRequest('Назначение категории с подкатегориями менять нельзя');return row.update(value,{transaction:t});}
+ return M.ExpenseArticle.create({...value,parentId},{transaction:t});
+ });}
+async function resolve(b,t){if(!b.articleId)return b;if(typeof b.articleId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(b.articleId))throw ApiError.badRequest('Выберите статью');const a=await M.ExpenseArticle.findByPk(b.articleId,{transaction:t}),p=a?.parentId?await M.ExpenseArticle.findByPk(a.parentId,{transaction:t}):null;if(!a||!a.active||a.review||p&&(!p.active||p.review))throw ApiError.badRequest('Статья больше недоступна. Выберите другую');if(b.articleVersion&&b.articleVersion!==new Date(a.updatedAt).toISOString())throw ApiError.badRequest('Настройки статьи изменились. Выберите её заново');return {...b,articleId:a.id,kind:a.kind,costGroup:a.costGroup,category:p?.name||a.name,subcategory:p?a.name:'',name:b.name?.trim()||a.name};}
+module.exports={ensure,list,save,resolve,icons};

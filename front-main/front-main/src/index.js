@@ -1,0 +1,31 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import {BrowserRouter} from "react-router-dom";
+
+import App from "./app/App";
+
+console.log("process.env.API_URL:", process.env.API_URL_DEV);
+
+// Таким же способом можно динамически менять иконку сайта
+
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+root.render(
+    <BrowserRouter basename={window.location.pathname.startsWith('/legacy') ? '/legacy' : undefined}>
+        <App />
+    </BrowserRouter>
+);
+
+/*
+▄───▄
+█▀█▀█
+█▄█▄█
+─███──▄▄
+─████▐█─█
+─████───█
+─▀▀▀▀▀▀▀
+*/
+

@@ -1,0 +1,34 @@
+import React,{useMemo,useState} from 'react';
+import ResultOptions from './ResultOptions';
+import {financialMetrics} from './financialMetrics';
+import {moneyFmt as fmt} from './api';
+import {Table,Empty} from './Fields';
+import {Bars} from './ReportCharts';
+export default function MarginReport({data,from,to,compact=false,onDetails,onExpenses,onStock}){
+ const [withCounts,setWithCounts]=useState(false),[withPersonal,setWithPersonal]=useState(false);
+ const f=useMemo(()=>financialMetrics(data,from,to,withCounts),[data,from,to,withCounts]),m=f.margin;
+ return <>
+  <section className="op-card op-profit-card">
+   <div className="op-section-heading"><h2>Операционная прибыль</h2></div>
+   <ResultOptions withCounts={withCounts} withPersonal={withPersonal} onCounts={setWithCounts} onPersonal={setWithPersonal}/><strong className={f.profit==null?'op-profit-number op-profit-pending':f.profit<0?'op-profit-number op-margin-alert':'op-profit-number op-margin-positive'}>{f.profit==null?'Не рассчитана':fmt(f.profit)+' ₸'}</strong>
+   <div className="op-profit-breakdown"><span>Текущие расходы <b>{fmt(f.operating)} ₸</b></span><span>Потери возвратов <b>{m.scrapComplete?fmt(m.scrapCost)+' ₸':'Неизвестны'}</b></span>{withCounts&&<span>Ревизии <b>{f.counts.complete?fmt(f.counts.cost)+' ₸':'Количество учтено, цена известна не полностью'}</b></span>}</div>
+   {!f.complete&&<div className="op-profit-tasks">{!m.complete&&<p className="op-missing">Нет полной себестоимости продаж.</p>}{f.expenses.unknown.length>0&&<button className="op-profit-task" onClick={onExpenses}>Разобрать расходы · {f.expenses.unknown.length} →</button>}{withCounts&&!f.counts.complete&&<p className="op-field-hint">Пересчёты приняты, остатки исправлены. Денежный результат по позициям без закупочной цены пока неполный.</p>}{f.overheadReview&&<p className="op-missing">В выпусках уже есть «Прочее» {fmt(f.capitalizedOverhead)} ₸ и отдельно введены текущие расходы. Нужна сверка, что это разные затраты. Прибыль не показывается как точная, чтобы не вычесть одно и то же дважды.</p>}{f.payrollUnallocated.length>0&&<p className="op-missing">Есть исторические начисления без подтверждённого распределения: {f.payrollUnallocated.map(r=>r.month+' · '+fmt(r.amount)+' ₸').join('; ')}. Для точной прибыли нужна сверка начальной зарплаты.</p>}{f.payrollPending.length>0&&<p className="op-missing">Есть неподтверждённые начисления зарплаты.</p>}</div>}
+   {withPersonal&&<div className="op-personal-result"><div><span>Личные траты</span><b>{fmt(f.personal)} ₸</b></div><div><span>После личных трат</span><strong>{f.profit==null?'Не рассчитана':fmt(f.profit-f.personal)+' ₸'}</strong></div><small>Личные расходы не уменьшают прибыль бизнеса выше.</small></div>}<p className="op-muted">Маржа − текущие расходы − потери{withCounts?' + результат ревизий':''}. До налогов.</p>
+  </section>
+  <section className="op-card op-margin">
+   <div className="op-section-heading"><h2>Что заработали на продажах</h2>{compact&&<button className="ghost" onClick={onDetails}>Подробнее →</button>}</div>
+   <div className="op-margin-numbers"><div><span>Продажи после возвратов</span><strong>{fmt(m.revenue)} ₸</strong></div><div><span>Себестоимость продаж</span><strong>{m.complete?fmt(m.knownCost)+' ₸':'Нужна сверка'}</strong></div><div className={!m.complete||m.margin<0?'op-margin-alert':'op-margin-positive'}><span>Валовая маржа</span><strong>{m.margin==null?'Не рассчитана':fmt(m.margin)+' ₸'}</strong><small>{m.rate==null?'':fmt(m.rate)+'% от продаж'}</small></div></div>
+   {!m.complete&&<p className="op-missing" role="status">Нужна оценка {m.unknownRows} позиций · {fmt(m.unknownKg)} кг продаж и возвратов. Старые остатки требуют оценки. Известная часть себестоимости: {fmt(m.knownCost)} ₸.</p>}
+   <p className="op-muted">До текущих расходов и налогов.</p>
+  </section>
+  {!compact&&<>
+   <div className="op-charts-grid">
+    <section className="op-card"><h2>Какие товары зарабатывают больше</h2><Bars rows={m.ranked.filter(r=>r.complete)} value="margin" unit="₸"/>{m.ranked.some(r=>!r.complete)&&<p className="op-missing">Товары без полной оценки исключены из графика.</p>}</section>
+    <section className="op-card"><h2>Потери по возвратам</h2><div className="op-margin-numbers"><div><span>Списано по себестоимости</span><strong>{m.scrapComplete?fmt(m.scrapCost)+' ₸':'Нужна оценка'}</strong></div><div><span>Маржа после этих потерь</span><strong>{m.afterScrap==null?'Не рассчитана':fmt(m.afterScrap)+' ₸'}</strong></div></div><p className="op-muted">Принятый возврат уменьшает продажи и себестоимость по исходной отгрузке. Проверка хранится отдельно; списание — отдельная потеря, а возврат в продажу восстанавливает запас.</p></section>
+   </div>
+   <section className="op-card"><h2>Стоимость готового склада сейчас</h2><p className="op-muted">На проверке отдельно: {fmt(m.heldKg)} кг · известная стоимость {fmt(m.heldValue)} ₸{m.heldUnknownKg>.0001?' · есть товар без оценки':''}.</p><p className="op-muted">Известная стоимость: {fmt(m.stockKnownValue)} ₸. Количество без оценки: {fmt(m.stockUnknownKg)} кг.</p><Table mobileCards headers={['Товар','Всего, кг','Без оценки, кг','Известная стоимость, ₸']}>{m.stock.filter(s=>Number(s.kg)>0).map(s=><tr key={s.productId}><td>{s.name}</td><td>{fmt(s.kg)}</td><td className={s.unknownKg>.0001?'op-margin-alert':''}>{fmt(s.unknownKg)}</td><td>{fmt(s.value)}</td></tr>)}</Table></section>
+   <section className="op-card"><h2>Из чего сложилась маржа</h2><Table mobileCards headers={['Дата / покупатель','Товар','Продажи, ₸','Себестоимость, ₸','Маржа, ₸']}>{m.rows.map(r=><tr key={r.id}><td>{r.date}<small className="op-muted"> · {r.client}</small></td><td>{r.isReturn?'Возврат · ':''}{r.name}</td><td>{fmt(r.revenue)}</td><td className={!r.complete?'op-margin-alert':''}>{r.complete?fmt(r.knownCost):'Неизвестна'}</td><td>{r.complete?fmt(r.revenue-r.knownCost):'—'}</td></tr>)}</Table>{!m.rows.length&&<Empty>За выбранный период отгрузок нет</Empty>}</section>
+   <details className="op-help"><summary>Как считается</summary><p>При проведении выпуска сохраняются сырьё, работа и накладные затраты по калькуляции. При отгрузке списывается средняя стоимость имеющегося запаса. Изменение рецептуры и закупочной цены не меняет прежние отгрузки. Смешанный запас с неизвестной начальной оценкой остаётся частично неизвестным до его выбытия. Остатки на проверке не входят в доступный для продажи склад.</p><p>Операционная прибыль учитывает классифицированные текущие расходы, начисления команде вне себестоимости выпуска и потери возвратов. Месячный оклад и процент представителя признаются в последний день месяца начисления. Выплаты зарплаты, оплаты запасов и возвраты денег повторно не вычитаются. Ревизии добавляются отдельным переключателем; налоги не включены. Период продажи относится к отгрузке или приёму возврата, а не к оплате.</p></details>
+  </>}
+ </>;
+}

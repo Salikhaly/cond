@@ -1,0 +1,16 @@
+require('dotenv').config();process.env.TELEGRAM_ENABLED='false';
+const {Client}=require('pg'),fs=require('fs'),database='cond_business_audit_'+Date.now();
+const owner=new Client({host:process.env.DB_HOST,port:process.env.DB_PORT,user:process.env.DB_USER,password:process.env.DB_PASSWORD,database:'postgres'});let db,created=false;
+(async()=>{await owner.connect();await owner.query('CREATE DATABASE "'+database+'"');created=true;delete process.env.DATABASE_URL;Object.assign(process.env,{DB_NAME:database,LOCAL_DEMO:'true',PUBLIC_DEMO:'false'});
+ const M=require('../src/models/operations'),L=require('../src/models/models');require('../src/models/sync');require('../src/services/idempotency');db=require('../src/database/sequelize');await db.sync();await require('../src/database/seedLocal')();
+ const ops=require('../src/services/operationsService'),counts=require('../src/services/stockCountService'),authority=require('../src/services/authorityService'),admin=(await L.User.findOne({where:{role:'super_admin'}})).toJSON();
+ const material=await ops.material(admin,{name:'Аудит: материал без введённой цены',unit:'кг'}),doc=await counts.create(admin,{date:'2026-10-30',lines:[{kind:'material',itemId:material.id}]});
+ const accepted=await counts.accept(admin,doc.id,{confirmed:true,skipUncounted:true,expectedUpdatedAt:doc.updatedAt.toISOString(),lines:doc.lines.map(l=>({...l,actualQty:10}))});
+ const operator=(await L.User.create({name:'Аудит: оператор',email:'audit-operator@local.test',role:'super_admin'})).toJSON();await M.AccountAuthority.create({userId:operator.id,tier:'admin',permissions:{inventory:true,pastDates:false}});operator.authority=await authority.access(operator);
+ const old=await counts.create(admin,{date:'2026-01-01',lines:[{kind:'material',itemId:material.id}]});const body={confirmed:true,skipUncounted:true,expectedUpdatedAt:old.updatedAt.toISOString(),lines:old.lines.map(l=>({...l,actualQty:9}))};
+ const request=suffix=>({user:operator,method:'POST',path:'/stock-counts/'+old.id+'/'+suffix,body});let normalPost,acceptPath;
+ try{await authority.authorize(request('post'));normalPost={allowed:true};}catch(e){normalPost={allowed:false,status:e.status};}
+ try{await authority.authorize(request('accept'));const posted=await counts.accept(operator,old.id,body);acceptPath={allowed:true,status:posted.status,date:posted.date};}catch(e){acceptPath={allowed:false,status:e.status,message:e.message};}
+ const result={isolatedDatabase:true,workingDatabaseChanged:false,findings:{unpricedMaterial:{inputPriceProvided:false,quantity:Number((await M.Material.findByPk(material.id)).quantity),costComplete:accepted.lines[0].costComplete,costDelta:accepted.lines[0].costDelta},pastDatePermission:{operatorPastDates:operator.authority.permissions.pastDates,normalPost,acceptPath}},reconciliation:await require('../src/services/reconciliationService')(admin)};
+ fs.writeFileSync('../../artifacts/business-audit-probes-2026-10-30.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(db)await db.close();if(created)await owner.query('DROP DATABASE "'+database+'" WITH (FORCE)');await owner.end();});

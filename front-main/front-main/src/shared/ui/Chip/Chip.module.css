@@ -1,0 +1,13 @@
+.Chip {
+    padding: 5px;
+    background-color: silver;
+    color: white;
+    font-size: 14px;
+    border-radius: 50%;
+}
+
+@media (max-width:400px){
+    .Chip {
+        font-size: 12px;
+    }
+}

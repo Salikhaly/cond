@@ -1,0 +1,4 @@
+.local-logs/
+artifacts/
+deploy/.env.production
+deploy/backups/

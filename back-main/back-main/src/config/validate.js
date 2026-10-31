@@ -1,0 +1,21 @@
+module.exports = function validate() {
+    if (!process.env.SECRET_KEY) throw new Error('SECRET_KEY is required');
+    const telegram = require('../services/telegramService').config();
+    if (telegram.enabled && !telegram.ready) throw new Error('Проверьте TELEGRAM_BOT_TOKEN, TELEGRAM_GROUP_ID, TELEGRAM_APP_URL (HTTPS) и TELEGRAM_REMINDER_HOURS');
+    if (process.env.PRESENTATION_MODE === 'true' && !/^cond_presentation_\d{8}$/.test(process.env.DB_NAME || '')) throw new Error('Presentation mode requires its separate dated database');
+    if (process.env.NODE_ENV !== 'production') return;
+    const missing = ['DB_NAME','DB_USER','DB_PASSWORD','DB_HOST','CLIENT_URL','SMTP_HOST','SMTP_PORT','SMTP_USER','SMTP_PASSWORD'].filter(k => !process.env[k]);
+    if (missing.length) throw new Error('Missing production settings: ' + missing.join(', '));
+    if (process.env.LOCAL_DEMO === 'true') throw new Error('LOCAL_DEMO must be false in production');
+    if (process.env.PRESENTATION_MODE === 'true') throw new Error('PRESENTATION_MODE must be false in production');
+    if (process.env.SECRET_KEY.length < 48 || /change.?me|example|replace|WUai@/i.test(process.env.SECRET_KEY)) throw new Error('Use a unique random SECRET_KEY of at least 48 characters');
+    if (process.env.DB_USER === 'cond_local' || process.env.DB_PASSWORD === 'cond_local_dev') throw new Error('Local demo database credentials are forbidden in production');
+    if (process.env.DB_PASSWORD.length < 16 || /replace|change.?me|example/i.test(process.env.DB_PASSWORD)) throw new Error('Use a unique database password of at least 16 characters');
+    if (/replace|change.?me/i.test(process.env.SMTP_PASSWORD) || /replace|change.?me/i.test(process.env.SUPERADMIN_PASSWORD || '')) throw new Error('Replace example SMTP and admin credentials');
+    const client = new URL(process.env.CLIENT_URL);
+    if (client.protocol !== 'https:' || client.pathname !== '/' || client.search || client.hash || client.username || client.password) throw new Error('CLIENT_URL must be an HTTPS origin');
+    if (client.hostname.endsWith('.example.com') || client.hostname.endsWith('.invalid')) throw new Error('Set the actual production domain');
+    if (!['465', '587', '2525', '25'].includes(String(process.env.SMTP_PORT))) throw new Error('Check SMTP_PORT');
+    if (process.env.SUPERADMIN_EMAILS && (!process.env.SUPERADMIN_PASSWORD || process.env.SUPERADMIN_PASSWORD.length < 14)) throw new Error('Bootstrap admin password must contain at least 14 characters');
+    if (process.env.SUPERADMIN_EMAILS && process.env.SUPERADMIN_EMAILS.split(/\s+/).filter(Boolean).some(email => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.endsWith('@example.com'))) throw new Error('Set actual administrator email addresses');
+};

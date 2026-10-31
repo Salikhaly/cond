@@ -1,0 +1,3 @@
+const a=require('assert/strict'),{ownerMetrics}=require('../src/operations/ownerMetrics');
+const data={products:[],materials:[],workers:[],orders:[],outcomes:[],payroll:[],incomes:[{id:1,totalWeight:10,totalAmount:20000,date:'2025-02-01',productId:1},{id:2,totalWeight:0,totalAmount:66000,date:'2025-02-01',productId:2}],productions:[{status:'posted',kg:10,laborCost:1000,totalCost:1000,snapshot:{historical:true},date:'2025-02-01'}]};
+const result=ownerMetrics(data,'2025-02-01','2025-02-28','2026-10-30');a.equal(result.productionIncomplete,true);a.equal(result.costPerKg,null);a.equal(result.pricePerKg,2000);console.log('3 historical report checks passed');

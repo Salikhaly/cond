@@ -1,0 +1,16 @@
+const {day}=require('./overviewMetrics');
+const labels={operating:'Текущие расходы',inventory:'Запасы',asset:'Оборудование / активы',payroll:'Выплата зарплаты',owner:'Личные расходы',unknown:'Нужно разобрать'};
+const defaults={'Машина':['Бензин','Газ','Запчасти','Ремонт','Мойка'],'Вода и коммунальные услуги':['Вода','Электричество','Отопление'],'Связь и интернет':['Связь','Интернет'],'Промышленные закупки':[],'Оборудование':[],'Зарплата':[],'Аренда':[],'Прочие расходы':[]};
+function costGroup(meta){if(meta?.costGroup)return meta.costGroup;const sub=meta?.subcategory||'';return /^(свет|электричество|электроэнергия)$/i.test(sub)?'electricity':/^вода$/i.test(sub)?'water':'business';}
+function expenseRows(data){
+ const auto=new Map((data.receiptExpenseIds||[]).map(id=>[String(id),'inventory']));for(const p of data.payrollPaymentInfo||[])if(p.outcomeId)auto.set(String(p.outcomeId),'payroll');for(const e of data.cashEntries||[])if(e.outcomeId)auto.set(String(e.outcomeId),'inventory');for(const r of data.returns||[])for(const s of r.settlements||[])if(s.outcomeId)auto.set(String(s.outcomeId),'return-refund');
+ const personal=(data.moneyPersonal||[]).map(r=>({id:'money:'+r.id,name:r.name,date:r.date,totalAmount:r.amount,kind:'owner',kindLabel:labels.owner,category:'Личные изъятия',subcategory:'',method:'unknown',comment:'',responsibleName:'',linked:true}));
+ return personal.concat((data.outcomes||[]).map(row=>{const meta=(data.expenseMeta||[]).find(m=>String(m.outcomeId)===String(row.id)),kind=auto.get(String(row.id))||(row.advanceId?'payroll':meta?.kind||'unknown');return {...row,date:day(row.date),costGroup:costGroup(meta),kind,kindLabel:kind==='return-refund'?'Возврат денег':labels[kind],category:meta?.category||row.outcome_category?.name||'Без категории',subcategory:meta?.subcategory||'',method:meta?.method||'unknown',comment:meta?.comment||'',responsibleName:meta?.responsibleName||'',actorName:meta?.actorName||'',meta,linked:auto.has(String(row.id))||!!row.advanceId};}));
+}
+function expenseMetrics(data,from='',to='',filters={}){
+ const rows=expenseRows(data).filter(r=>(!from||r.date>=from)&&(!to||r.date<=to)&&(!filters.category||r.category===filters.category)&&(!filters.method||r.method===filters.method)&&(!filters.kind||(filters.kind==='business'?!['owner','unknown'].includes(r.kind):r.kind===filters.kind))&&(!filters.search||[r.name,r.recipient,r.comment,r.subcategory].join(' ').toLocaleLowerCase('ru').includes(filters.search.toLocaleLowerCase('ru'))));
+ const operating=rows.filter(r=>r.kind==='operating').reduce((s,r)=>s+Number(r.totalAmount),0),unknown=rows.filter(r=>r.kind==='unknown');
+ const by={};for(const r of rows){const v=by[r.category]||(by[r.category]={name:r.category,amount:0});v.amount+=Number(r.totalAmount);}const months={};for(const r of rows){const key=r.date.slice(0,7),v=months[key]||(months[key]={name:key,amount:0});v.amount+=Number(r.totalAmount);}
+ return {personal:rows.filter(r=>r.kind==='owner').reduce((s,r)=>s+Number(r.totalAmount),0),rows,operating,unknown,complete:unknown.length===0,total:rows.reduce((s,r)=>s+Number(r.totalAmount),0),categories:Object.values(by).sort((a,b)=>b.amount-a.amount),months:Object.values(months).sort((a,b)=>a.name.localeCompare(b.name))};
+}
+module.exports={expenseMetrics,expenseRows,expenseKinds:labels,expenseDefaults:defaults,costGroup};

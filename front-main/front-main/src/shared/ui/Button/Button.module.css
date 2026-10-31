@@ -1,0 +1,90 @@
+.Button {
+    padding: 13px;
+    font-size: 16px;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* margin-top: 10px; */
+    /* margin-bottom: 10px; */
+    cursor: pointer;
+    font-weight: 600;
+    background-color: #1E262F;
+    color: white;
+}
+.Button:hover {
+    opacity: 95%;
+}
+.Button svg {
+    margin-right: 10px;
+}
+
+.Button--isIconic svg {
+    margin-right: 0;
+    fill: white;
+}
+
+.Button--disabled {
+    background-color: #e3e3e3 !important;
+    color: #adadad !important;
+}
+.Button--third {
+    color: white;
+    font-size: 21px;
+    background-color: rgba(30, 38, 47, 0.93);
+}
+.Button--third:hover {
+    /*background-color: #1E262F;*/
+    opacity: .8;
+}
+
+.Button--clear {
+    padding: 0!important;
+    background: none!important;
+    margin-left: 8px;
+}
+.Button--green {
+    background: #419152;
+}
+.Button--clear:hover{
+    opacity: .8;
+}
+.Button--clear svg {
+    fill: #1E262F;
+    scale: 1.2!important;
+    /*scale: 1.75;*/
+}
+
+.Button--cancel {
+    background: var(--color-cancel)!important;
+    color: #1c1c1c;
+}
+
+.Button--danger {
+    border: 1px solid #d73333;
+    background: none!important;
+    color: #d73333;
+}
+
+.Button--small {
+    width: 30px !important;
+    height: 30px !important;
+}
+
+.Button--small-text {
+    width: fit-content !important;
+    padding: 10px !important;
+    font-size: 14px;
+    line-height: 10px;
+}
+.Button--outline {
+    background: none;
+    border: 1px solid #1E262F;
+    color: #1E262F;
+}
+
+@media (max-width:767px){
+    .Button {
+        padding: 8px;
+    }
+}

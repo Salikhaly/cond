@@ -1,0 +1,3 @@
+function normalizeNumber(value){return String(value??'').replace(/\u00a0|\u202f| /g,'').replace(',','.');}
+function numericError(value,{min,max,step}={}){const raw=normalizeNumber(value);if(raw==='')return '';if(!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(raw)||!Number.isFinite(Number(raw)))return 'Введите число';const n=Number(raw);if(min!==undefined&&n<Number(min))return 'Минимум: '+min;if(max!==undefined&&n>Number(max))return 'Максимум: '+max;if(step&&step!=='any'){const size=Number(step),base=Number(min||0),ratio=(n-base)/size;if(size>0&&Math.abs(ratio-Math.round(ratio))>1e-6){const places=String(step).split('.')[1]?.length||0;return places?'Не больше '+places+' знаков после запятой':'Введите целое число';}}return '';}
+module.exports={normalizeNumber,numericError};

@@ -1,0 +1,58 @@
+:root {
+    --color-main: #132765;
+    /*--color-main: #0B3D91;*/
+    --color-second: #fd7c33;
+    /*--color-bg: #EBECED;*/
+    --color-bg: #eaeaea;
+    /* --color-bg: #fffdfc; */
+    --color-danger: #dc3545;
+    --font-family-text: 'Manrope';
+    --font-family-title: 'Manrope';
+    /*--font-size-mobile: 13px;*/
+    --font-size-title: 42px;
+    /*--font-size-desktop: 15px;*/
+
+    --color-cancel: EBEDF0;
+}
+
+html[data-theme='light'] {
+    --color-bg: #eaeaea;
+    --color-block-bg: #f4f2ef;
+    --color-devider: #ddd;
+    --color-text: black;
+    --color-bg-card: white;
+    --color-bg-card-second: white;
+    --color-element-secondary: #d8d8d8;
+    --color-element-secondary-hover: #c9c9c9;
+    --color-element-secondary-text: black;
+    --color-active: #3E6AD7;
+    --color-active-text: white;
+    --color-main: #132765;
+    --color-main-active: #1E262F;
+    --color-main-text: white;
+    --color-second: #2086E5;
+    --color-link: #2086E5;
+    --color-second-text: white;
+
+    --color-cancel: EBEDF0;
+}
+html[data-theme='dark'] {
+    --color-bg: #0a182c;
+    --color-bg-card: #030a22;
+    --color-bg-card-second: #22365b;
+    --color-devider: #696969;
+    --color-text: white;
+    --color-element-secondary: #181e34;
+    --color-element-secondary-hover: #c9c9c9;
+    --color-element-secondary-text: black;
+    --color-active: #3E6AD7;
+    --color-main: #132765;
+    --color-main-active: #eeeeee;
+    --color-main-text: white;
+    --color-cancel: EBEDF0;
+    --color-second: #2086E5;
+    --color-link: #43a0f8;
+    --color-active-text: white;
+    --color-second-text: white;
+
+}

@@ -1,0 +1,2 @@
+const a=require('assert/strict'),{normalizeNumber:n,numericError:e}=require('../src/operations/numericValue');
+a.equal(n('2 000,36'),'2000.36');a.equal(e('2000.36',{min:0,step:'.01'}),'');a.ok(e('2000.0036',{min:0,step:'.01'}));a.equal(e('0.125',{min:0,step:'.001'}),'');a.ok(e('-1',{min:0}));a.ok(e('12e3',{}));a.ok(e('11',{max:10}));a.ok(e('2.5',{step:1}));a.equal(e('',{min:0}),'');a.equal(e('2.00',{step:1}),'');console.log('10 numeric input checks passed');
