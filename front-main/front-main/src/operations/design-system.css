@@ -646,6 +646,53 @@
     color: var(--ds-danger);
 }
 
+.op-app .op-supplier-focus {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.op-app .op-supplier-focus > div {
+    padding: 12px 13px;
+    border: 1px solid #dce7ff;
+    border-radius: 14px;
+    background: #f5f8ff;
+}
+
+.op-app .op-supplier-focus span,
+.op-app .op-supplier-focus b {
+    display: block;
+}
+
+.op-app .op-supplier-focus span {
+    color: #667a70;
+    font-size: 10.5px;
+}
+
+.op-app .op-supplier-focus b {
+    margin-top: 4px;
+    color: var(--ds-ink);
+    font-size: 18px;
+}
+
+.op-app .op-supplier-focus > div.over {
+    border-color: #f0c6c0;
+    background: #fff4f1;
+}
+
+.op-app .op-supplier-focus > div.over b {
+    color: var(--ds-danger);
+}
+
+.op-app .op-table-wrap tr.op-price-best td {
+    background: #f2fbf6;
+}
+
+.op-app .op-table-wrap tr.op-price-focus td:first-child {
+    box-shadow: inset 3px 0 var(--ds-blue);
+}
+
 .op-app .op-pay-graphic {
     margin-top: 18px;
 }
@@ -884,6 +931,19 @@
     }
 
     .op-app .op-pay-graphic-head h3 {
+        font-size: 15px;
+    }
+
+    .op-app .op-supplier-focus {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+    .op-app .op-supplier-focus > div {
+        padding: 10px;
+    }
+
+    .op-app .op-supplier-focus b {
         font-size: 15px;
     }
 }
