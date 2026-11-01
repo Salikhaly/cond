@@ -15,7 +15,7 @@ async function importNative(){
   if(!admin||!rep)throw Error('Seed demo accounts first');
   const products=await L.Product.bulkCreate(p.products.map(x=>({name:x.name,weight:x.unit==='шт'?1:x.weight,priceTotal:0,weightTotal:0,priceForEmployee:p.acts.find(a=>a.product===x.key)?.rate||0,quantity:0,is_active:x.sellable&&x.unit!=='шт',ingredients:[],additional:{sourceWorkbook:source.name,unit:x.unit,stockVerified:false}})),opts);
   const productMap=new Map(p.products.map((x,i)=>[x.key,products[i]]));
-  await M.ProductDisplay.bulkCreate(products.map(x=>({productId:x.id,description:'Из учёта за февраль 2025. Состав и текущий остаток требуют сверки.'})),opts);
+  await M.ProductDisplay.bulkCreate(products.map(x=>({productId:x.id,description:'Из учёта за февраль 2025. Состав в Excel не указан; остаток требует сверки.'})),opts);
   await M.Stock.bulkCreate(products.map(x=>({productId:x.id,kg:0,reservedKg:0})),opts);
   const workers=await L.User.bulkCreate(p.workers.map((x,i)=>({name:x.name,email:'feb2025-'+i+'@history.demo.test',role:'employee',password:null,email_confirmed:new Date()})),opts),workerMap=new Map(p.workers.map((x,i)=>[x.key,workers[i]]));
   // Historical employees do not gain a public login with the owner's password.
