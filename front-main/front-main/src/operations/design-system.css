@@ -529,6 +529,273 @@
     color: var(--ds-danger);
 }
 
+.op-app .op-pay-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 14px 0 12px;
+}
+
+.op-app .op-pay-tile {
+    min-width: 0;
+    padding: 14px 14px 13px;
+    border: 1px solid var(--ds-line);
+    border-radius: 16px;
+    background: #fff;
+}
+
+.op-app .op-pay-tile > span,
+.op-app .op-pay-tile > strong,
+.op-app .op-pay-tile > small {
+    display: block;
+}
+
+.op-app .op-pay-tile > span {
+    font-size: 11px;
+    font-weight: 650;
+    color: #62736a;
+}
+
+.op-app .op-pay-tile > strong {
+    margin: 7px 0 4px;
+    font-size: 22px;
+    line-height: 1.15;
+    letter-spacing: -.5px;
+    color: var(--ds-ink);
+    white-space: nowrap;
+}
+
+.op-app .op-pay-tile > small {
+    font-size: 10.5px;
+    line-height: 1.35;
+    color: #718078;
+}
+
+.op-app .op-pay-tile.earned {
+    border-color: #d6ede2;
+    background: #f4fbf7;
+}
+
+.op-app .op-pay-tile.earned > strong {
+    color: var(--ds-accent);
+}
+
+.op-app .op-pay-tile.taken {
+    border-color: #dce7ff;
+    background: #f5f8ff;
+}
+
+.op-app .op-pay-tile.taken > strong {
+    color: var(--ds-blue);
+}
+
+.op-app .op-pay-tile.available {
+    border-color: #cfe8dd;
+    background: #eef9f3;
+}
+
+.op-app .op-pay-tile.available > strong {
+    color: var(--ds-accent);
+}
+
+.op-app .op-pay-tile.over {
+    border-color: #f0c6c0;
+    background: #fff4f1;
+}
+
+.op-app .op-pay-tile.over > strong {
+    color: var(--ds-danger);
+}
+
+.op-app .op-pay-balance {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 10px 0 14px;
+    padding: 14px 16px;
+    border: 1px solid #d6ede2;
+    border-radius: 16px;
+    background: #f4fbf7;
+}
+
+.op-app .op-pay-balance > span {
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--ds-accent);
+}
+
+.op-app .op-pay-balance > strong {
+    font-size: 24px;
+    letter-spacing: -.5px;
+    color: var(--ds-accent);
+}
+
+.op-app .op-pay-balance > small {
+    font-size: 11px;
+    color: #62736a;
+}
+
+.op-app .op-pay-balance.over {
+    border-color: #f0c6c0;
+    background: #fff4f1;
+}
+
+.op-app .op-pay-balance.over > span,
+.op-app .op-pay-balance.over > strong {
+    color: var(--ds-danger);
+}
+
+.op-app .op-pay-days-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 18px 0 8px;
+}
+
+.op-app .op-pay-days-head h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.op-app .op-pay-days-head small {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #6b7a70;
+}
+
+.op-app .op-pay-days {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 3px 1px 10px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+}
+
+.op-app .op-pay-day {
+    display: flex;
+    flex: 0 0 58px;
+    min-width: 58px;
+    min-height: 76px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 9px 5px;
+    border: 1px solid var(--ds-line);
+    border-radius: 14px;
+    background: #fff;
+    color: #5d6b62;
+    scroll-snap-align: start;
+}
+
+.op-app .op-pay-day b {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.op-app .op-pay-day small {
+    max-width: 100%;
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.op-app .op-pay-day i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #d9822b;
+}
+
+.op-app .op-pay-day.worked {
+    border-color: #d6ede2;
+    background: #f4fbf7;
+    color: var(--ds-accent);
+}
+
+.op-app .op-pay-day.earned {
+    border-color: #bfe2cf;
+    background: #e9f5ee;
+    color: var(--ds-accent);
+}
+
+.op-app .op-pay-day.pending {
+    border-color: #f1d3ab;
+    background: #fff3e3;
+    color: #a9651d;
+}
+
+.op-app .op-pay-day.selected {
+    border-color: var(--ds-dark);
+    box-shadow: 0 0 0 2px var(--ds-dark);
+}
+
+.op-app .op-pay-days-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin-top: 6px;
+    font-size: 10.5px;
+    color: #6b7a70;
+}
+
+.op-app .op-pay-days-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.op-app .op-pay-days-legend i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e3eae5;
+}
+
+.op-app .op-pay-days-legend i.green {
+    background: var(--ds-accent);
+}
+
+.op-app .op-pay-days-legend i.amber {
+    background: #d9822b;
+}
+
+@media (max-width: 520px) {
+    .op-app .op-pay-summary {
+        gap: 6px;
+    }
+
+    .op-app .op-pay-tile {
+        padding: 11px 9px;
+        border-radius: 13px;
+    }
+
+    .op-app .op-pay-tile > strong {
+        font-size: 17px;
+    }
+
+    .op-app .op-pay-tile > span {
+        font-size: 10px;
+    }
+
+    .op-app .op-pay-tile > small {
+        font-size: 9px;
+    }
+
+    .op-app .op-pay-day {
+        flex-basis: 52px;
+        min-width: 52px;
+        min-height: 70px;
+    }
+}
+
 @media (max-width: 700px) {
     .op-app .op-card {
         border-radius: 18px;
