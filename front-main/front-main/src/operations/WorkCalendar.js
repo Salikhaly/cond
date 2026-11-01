@@ -1,34 +1,15 @@
-import NumericInput from './SafeNumericInput';
-import React,{useMemo,useState,useEffect,useRef} from 'react';
-import {calendarMetrics,policyLabels} from './workCalendarMetrics';
-import {dayPayInsight,pieceForecast} from './dayPayInsight';
-import {api,moneyFmt,fmt,today} from './api';
+import React,{useMemo} from 'react';
+import {calendarMetrics} from './workCalendarMetrics';
+import {moneyFmt} from './api';
 
-const short=n=>Math.abs(n)>=1000?(n/1000).toLocaleString('ru-RU',{maximumFractionDigits:1})+' т':moneyFmt(n);
-
-function EarningsWhatIf({data,day,person}){
-    const products=[...data.products,...(data.archivedProducts||[]).filter(p=>day.productions.some(r=>r.productId===p.id))].map(p=>({...p,packKg:p.packKg??(data.packagingRuns||[]).find(r=>day.productions.some(x=>x.id===r.productionId&&x.productId===p.id))?.kgPerPack}));
-    const initialId=day.productions[0]?.productId||day.drafts[0]?.productId||data.products[0]?.id,initialProduct=products.find(p=>p.id===initialId),initialKg=[...day.productions,...day.drafts].filter(p=>p.productId===initialId).reduce((sum,p)=>sum+Number(p.kg),0);
-    const [productId,setProductId]=useState(String(initialId||'')),[quantity,setQuantity]=useState(initialKg?String(initialProduct?.packKg?initialKg/Number(initialProduct.packKg):initialKg):'');
-    const product=products.find(p=>String(p.id)===productId),past=day.date<today(),source=day.productions.filter(p=>String(p.productId)===productId),sourceKg=source.reduce((s,p)=>s+Number(p.kg),0),oldRate=sourceKg?source.reduce((s,p)=>s+Number(p.laborCost),0)/sourceKg:null,forecastProduct=past&&oldRate!=null?{...product,payRateForKg:oldRate,priceForEmployee:oldRate,payPerPack:oldRate==null?null:oldRate*Number(product?.packKg||0),packLaborPerPack:oldRate==null?null:oldRate*Number(product?.packKg||0)}:product,result=pieceForecast(forecastProduct,day.policy,quantity);
-    return <details className="op-help op-earnings-whatif"><summary>Сколько можно заработать на выработке?</summary><p className="op-muted">{past&&oldRate==null?'Ориентир по текущей ставке — без изменения прошлой зарплаты.':'Пример по ставке выбранной даты. Это не начисление зарплаты.'}</p><label className="op-field"><span>Товар</span><select value={productId} onChange={e=>setProductId(e.target.value)}>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label className="op-field"><span>{product?.packKg?'Если изготовить пачек':'Если изготовить, кг'}</span><NumericInput type="number" inputMode="decimal" min="0" step={product?.packKg?'1':'0.0001'} value={quantity} placeholder="Например: 50" onChange={e=>setQuantity(e.target.value)}/></label>{result?<div className="op-pay-possible"><span>{moneyFmt(result.rate)} ₸ × {fmt(quantity)} {result.unit}</span><strong>{moneyFmt(result.amount)} ₸</strong></div>:<p className="op-missing">Ставка за этот товар не задана. Её нужно уточнить в условиях оплаты.</p>}</details>;
-}
-
-export default function WorkCalendar({data,user,person,month,run,busy,onRequest,onRequests,initialDate,onNavigate}){
-    const admin=user.role==='super_admin',now=today(),m=useMemo(()=>calendarMetrics(data,person.id,month),[data,person.id,month]);
-    const [selected,setSelected]=useState(initialDate?.startsWith(month)?initialDate:now.startsWith(month)?now:month+'-01'),[offReason,setOffReason]=useState('');
-    const detail=useRef(null),jump=useRef(false);
-    useEffect(()=>{if(initialDate?.startsWith(month)){setSelected(initialDate);jump.current=true;}},[initialDate,month]);
-    useEffect(()=>{setOffReason('');if(jump.current){detail.current?.scrollIntoView({block:'start'});jump.current=false;}},[selected]);
-    const d=m.days.find(d=>d.date===selected)||m.days[0],profile=(data.workProfiles||[]).find(p=>p.userId===person.id),future=d.date>now,production=person.role==='employee'||d.isProduction,insight=dayPayInsight(data,person,d),canMark=admin&&data.permissions?.payroll!==false&&(!d.work||d.work.status==='reported')&&!future;
+export default function WorkCalendar({data,person,month}){
+    const m=useMemo(()=>calendarMetrics(data,person.id,month),[data,person.id,month]);
     const taken=Math.round(m.days.reduce((s,day)=>s+Number(day.paid||0),0)*100)/100;
     const difference=Math.round((Number(m.total||0)-taken)*100)/100;
     const available=Math.max(0,difference),overpaid=Math.max(0,-difference);
-    const mark=(status,comment)=>run(async()=>{await api('/work-days',{userId:person.id,date:d.date,status,comment});setOffReason('');},'Отметка сохранена');
-    const status=d.worked?'Работал':d.drafts.length?'Акт на проверке':d.off?'Не работал':d.work?.status==='reported'?'На проверке':'Не отмечено';
-    const dayOptions=['Выходной','Больничный','Отпуск','Не вышел'];
-    return <><section className="op-card">
-        <div className="op-section-heading"><div><span className="op-eyebrow">ЗАРАБОТОК ЗА МЕСЯЦ</span><h2>Сколько заработал</h2></div><span className="op-badge posted">{m.worked} раб. дней</span></div>
+    const monthTitle=new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T12:00:00Z'));
+    return <section className="op-card">
+        <div className="op-section-heading"><div><span className="op-eyebrow">ЗАРАБОТОК ЗА МЕСЯЦ</span><h2>Сколько заработал</h2><small className="op-muted">{monthTitle} · {m.worked} из {m.days.length} дней</small></div><span className={'op-badge '+(m.worked?'posted':'draft')}>{m.worked} раб. дней</span></div>
         <div className="op-pay-summary">
             <div className="op-pay-tile earned"><span>Заработал</span><strong>{moneyFmt(m.total)} ₸</strong><small>начислено за месяц</small></div>
             <div className="op-pay-tile taken"><span>Уже взял</span><strong>{moneyFmt(taken)} ₸</strong><small>выплаты и авансы</small></div>
@@ -36,24 +17,15 @@ export default function WorkCalendar({data,user,person,month,run,busy,onRequest,
         </div>
         {overpaid>0&&<p className="op-plan-context">Начислено {moneyFmt(m.total)} ₸, выплачено {moneyFmt(taken)} ₸. Переплата уменьшит будущие начисления.</p>}
         {m.unallocated!==0&&<p className="op-plan-context">Прежние начисления {moneyFmt(m.unallocated)} ₸ без разбивки по дням.</p>}
-        <div className="op-pay-days-head"><div><h3>Дни месяца</h3><small>Вышел — сумма за день. Не вышел — белый.</small></div><span className="op-muted">{new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T12:00:00Z'))}</span></div>
-        <div className="op-pay-days" aria-label="Дни месяца и заработок">
-            {m.days.map(day=><button key={day.date} className={'op-pay-day'+(day.earned>0?' earned':day.worked?' worked':'')+(day.pending?' pending':'')+(day.date===selected?' selected':'')} aria-pressed={day.date===selected} aria-label={day.date+': '+(day.worked?'работал, ':'')+(day.pending?'есть проверка, ':'')+'начислено '+moneyFmt(day.earned)+' тенге'} onClick={()=>{jump.current=true;setSelected(day.date);if(day.date===selected){detail.current?.scrollIntoView({block:'start'});jump.current=false;}}}><b>{day.number}</b><small>{day.earned>0?short(day.earned):day.worked?'0 ₸':''}</small>{day.pending&&<i aria-hidden="true"/>}</button>)}
+        <div className="op-pay-graphic">
+            <div className="op-pay-graphic-head"><h3>Вышел / не вышел</h3><small>каждый столбик — день месяца</small></div>
+            <div className="op-pay-graphic-grid" style={{gridTemplateColumns:'repeat('+m.days.length+', minmax(0, 1fr))'}}>
+                {m.days.map(day=>{
+                    const on=day.worked||day.earned>0;
+                    return <span key={day.date} className={'op-pay-graphic-day'+(on?' on':'')+(day.pending?' pending':'')} title={day.date+': '+(on?'вышел':'не вышел')+(day.pending?' · на проверке':'')} aria-label={day.date+': '+(on?'вышел':'не вышел')+(day.pending?' · на проверке':'')}/>;
+                })}
+            </div>
+            <div className="op-pay-graphic-legend"><span><i className="green"/>Вышел</span><span><i className="amber"/>На проверке</span><span><i/>Не вышел</span></div>
         </div>
-        <div className="op-pay-days-legend"><span><i className="green"/>Вышел и заработал</span><span><i className="amber"/>На проверке</span><span>Белый — не вышел</span></div>
-    </section>
-    <section className="op-card op-calendar-detail" ref={detail}><div className="op-section-heading"><h2>{new Intl.DateTimeFormat('ru-RU',{timeZone:'UTC',day:'numeric',month:'long'}).format(new Date(d.date+'T12:00:00Z'))}</h2><span className={'op-badge '+(d.worked?'posted':d.pending?'draft':d.off?'cancelled':'')}>{status}</span></div>{profile?.weekDays?.length>0&&<p className="op-muted">{profile.weekDays.includes(new Date(d.date+'T12:00:00Z').getUTCDay())?'По графику рабочий день':'По графику выходной'}</p>}<div className="op-day-earned"><span>Начислено за день</span><strong className={d.earned<0?'op-margin-alert':''}>{moneyFmt(d.earned)} ₸</strong></div><div className="op-pay-reasons"><h3>Из чего сумма</h3>{insight.reasons.map((r,i)=><p key={i}>{r}</p>)}</div><div className="op-profit-breakdown">{d.piece!==0&&<span>Сдельная выработка <b>{moneyFmt(d.piece)} ₸</b></span>}{d.daily&&<span>{policyLabels[d.daily.mode]} <b>{moneyFmt(d.dayPay)} ₸</b></span>}{d.correction!==0&&<span>Согласованные исправления <b>{moneyFmt(d.correction)} ₸</b></span>}{d.monthlyPart!==0&&<span>Расчёт за весь месяц <b>{moneyFmt(d.monthlyPart)} ₸</b></span>}</div>
-    {insight.possible!=null&&<div className="op-pay-possible"><span>{insight.possibleLabel}</span><strong>{moneyFmt(insight.possible)} ₸</strong>{!d.worked&&insight.unearned>0&&<small>{future?'Ориентир на смену.':'Без подтверждённой работы: '+moneyFmt(insight.unearned)+' ₸.'}</small>}</div>}
-    {insight.mode==='piece'&&<EarningsWhatIf key={d.date} data={data} day={d} person={person}/>}
-    {d.productions.length>0&&<div className="op-day-acts"><h3>Акты за день · {d.productions.length}</h3>{d.productions.map(p=><article key={p.id}><div><b>{[...data.products,...(data.archivedProducts||[])].find(x=>x.id===p.productId)?.name||'Товар'}</b><small>Проведён · {p.id.slice(0,8).toUpperCase()}</small></div><strong>{fmt(p.kg)} кг</strong>{Number(p.laborCost)>0&&<small>{fmt(p.kg)} кг → {moneyFmt(p.laborCost)} ₸ · ≈ {fmt(Number(p.laborCost)/Number(p.kg))} ₸/кг</small>}</article>)}</div>}
-    {d.drafts.length>0&&<div className="op-plan-context"><b>Ждут проведения · {d.drafts.length} актов</b><p>{d.drafts.map(p=>([...data.products,...(data.archivedProducts||[])].find(x=>x.id===p.productId)?.name||'Товар')+' · '+fmt(p.kg)+' кг').join('; ')}</p><button className="secondary" disabled={busy} onClick={()=>onNavigate?.('production',admin?{kind:'check-production',id:d.drafts[0].id}:null)}>Открыть акты →</button></div>}
-    {d.adjustments.length>0&&<details className="op-help"><summary>Причины доплат и удержаний</summary>{d.adjustments.map(a=><p key={a.id}>{moneyFmt(a.amount)} ₸ · {a.reason}</p>)}</details>}
-    {d.daily&&d.daily.status!=='posted'&&<div className="op-missing">{d.daily.status==='awaiting_cost'?'Нет себестоимости для процента.':'Ждёт согласования.'}<div className="op-actions"><button className="secondary" onClick={onRequests}>Согласования →</button>{admin&&d.daily.status==='awaiting_cost'&&<button className="secondary" disabled={busy} onClick={()=>onRequest({type:'daily_basis',date:d.date,dailyId:d.daily.id})}>Подтвердить проверенную базу</button>}</div></div>}
-    {d.paid>0&&<p className="op-plan-context">Выдано в этот день: <b>{moneyFmt(d.paid)} ₸</b>. Выплата не меняет начисление.</p>}
-    {production&&!d.worked&&!d.drafts.length&&!future&&<button className="op-wide-action" disabled={busy} onClick={()=>onNavigate?.('production',{kind:'day-production',date:d.date,workerId:person.id})}>Записать акт</button>}
-    {!production&&!admin&&d.date===now&&!d.work&&<button className="op-wide-action" disabled={busy} onClick={()=>run(()=>api('/work-days',{date:d.date}),'Отметка отправлена на проверку')}>Я отработал этот день</button>}
-    {canMark&&!d.work?._pending&&!d.worked&&!d.drafts.length&&<div className="op-actions">{!production&&<button disabled={busy} onClick={()=>mark('worked','Смена проверена')}>Подтвердить смену</button>}<button className="secondary" disabled={busy} onClick={()=>setOffReason('Выходной')}>Отметить: не работал</button></div>}
-    {offReason&&<div className="op-off-reason"><h3>Почему не работал?</h3><div className="op-expense-chips">{dayOptions.map(reason=><button className={reason===offReason?'selected':''} key={reason} onClick={()=>setOffReason(reason)}>{reason}</button>)}</div><div className="op-actions"><button disabled={busy} onClick={()=>mark('off',offReason)}>Сохранить причину</button><button className="ghost" onClick={()=>setOffReason('')}>Отмена</button></div></div>}
-    {future&&<p className="op-muted">Подтвердится актом.</p>}{!future&&<div className="op-actions"><button className="ghost" disabled={busy} onClick={()=>onRequest({type:'adjustment',date:d.date})}>{admin?'Исправить начисление':'Исправить начисление'}</button>{!production&&(!d.worked||!d.productions.length)&&<button className="ghost" disabled={busy} onClick={()=>onRequest({type:'attendance',date:d.date,status:d.worked?'off':'worked'})}>Исправить отметку дня</button>}</div>}
-    </section></>;
+    </section>;
 }

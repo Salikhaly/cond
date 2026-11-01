@@ -646,6 +646,85 @@
     color: var(--ds-danger);
 }
 
+.op-app .op-pay-graphic {
+    margin-top: 18px;
+}
+
+.op-app .op-pay-graphic-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 9px;
+}
+
+.op-app .op-pay-graphic-head h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.op-app .op-pay-graphic-head small {
+    color: #718078;
+    font-size: 10.5px;
+}
+
+.op-app .op-pay-graphic-grid {
+    display: grid;
+    gap: 3px;
+    width: 100%;
+}
+
+.op-app .op-pay-graphic-day {
+    display: block;
+    height: 36px;
+    border: 1px solid #e3eae5;
+    border-radius: 7px;
+    background: #fff;
+}
+
+.op-app .op-pay-graphic-day.on {
+    border-color: #b9dfca;
+    background: #2f9b70;
+}
+
+.op-app .op-pay-graphic-day.pending {
+    border-color: #eccb9e;
+    background: #e3a24a;
+}
+
+.op-app .op-pay-graphic-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin-top: 9px;
+    color: #6b7a70;
+    font-size: 10.5px;
+}
+
+.op-app .op-pay-graphic-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.op-app .op-pay-graphic-legend i {
+    width: 9px;
+    height: 9px;
+    border: 1px solid #e3eae5;
+    border-radius: 3px;
+    background: #fff;
+}
+
+.op-app .op-pay-graphic-legend i.green {
+    border-color: #2f9b70;
+    background: #2f9b70;
+}
+
+.op-app .op-pay-graphic-legend i.amber {
+    border-color: #e3a24a;
+    background: #e3a24a;
+}
+
 .op-app .op-pay-days-head {
     display: flex;
     align-items: flex-end;
@@ -793,6 +872,19 @@
         flex-basis: 52px;
         min-width: 52px;
         min-height: 70px;
+    }
+
+    .op-app .op-pay-graphic-grid {
+        gap: 2px;
+    }
+
+    .op-app .op-pay-graphic-day {
+        height: 30px;
+        border-radius: 5px;
+    }
+
+    .op-app .op-pay-graphic-head h3 {
+        font-size: 15px;
     }
 }
 
