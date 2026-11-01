@@ -1,0 +1,54 @@
+{
+  "version": 2,
+  "framework": null,
+  "installCommand": "npm install --omit=dev --no-audit --no-fund && npm --prefix front-main/front-main install --include=dev --no-audit --no-fund",
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "public",
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60,
+      "includeFiles": "back-main/back-main/src/**"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/telegram/cron/morning",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/telegram/cron/evening",
+      "schedule": "0 12 * * *"
+    }
+  ],
+  "rewrites": [
+
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/((?!api/|products/|.*\\.).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
+  ]
+}

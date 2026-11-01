@@ -2,3 +2,7 @@
 artifacts/
 deploy/.env.production
 deploy/backups/
+
+.vercel
+.env*
+/public/
