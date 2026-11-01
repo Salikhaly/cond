@@ -45,7 +45,7 @@ export async function request(path, body, method, operationId, sendingQueue=fals
     catch (e) {
         if (verb === 'GET' && ['/operations/me', '/operations/dashboard','/operations/trade-finance'].includes(path)) { const data = await cached(path); return path.endsWith('/dashboard') ? projectDashboard(data) : data; }
         if (path === '/operations/preview') return offlineCalculation(body);
-        const error = new Error('Нет связи с сервером. Операция не подтверждена. Повторите после восстановления связи.'); error.network = true; throw error;
+        const error = new Error('Нет связи. Повторим, когда появится сеть.'); error.network = true; throw error;
     }
     if (response.status >= 500) {
         if (verb === 'GET' && ['/operations/me', '/operations/dashboard','/operations/trade-finance'].includes(path)) { const data = await cached(path); return path.endsWith('/dashboard') ? projectDashboard(data) : data; }
@@ -63,8 +63,8 @@ export async function request(path, body, method, operationId, sendingQueue=fals
         await refreshing;
         response = await send();
     }
-    let data;try{data=await response.json();}catch{const error=new Error('Ответ сервера не подтверждён. Повторите ту же операцию.');error.network=true;throw error;}
-    if (!response.ok) throw new Error(data.message || (response.status === 403 ? 'Нет доступа' : 'Ошибка запроса'));
+    let data;try{data=await response.json();}catch{const error=new Error('Сервер не ответил. Повторите.');error.network=true;throw error;}
+    if (!response.ok) throw new Error(data.message || (response.status === 403 ? 'Нет доступа' : 'Не получилось. Повторите.'));
     await remember(path, data);
     return path === '/operations/dashboard' ? projectDashboard(data) : data;
 }

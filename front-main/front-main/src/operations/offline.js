@@ -33,7 +33,7 @@ export async function enqueue(path, body, method, operationId) {
     await saveQueued(row); return row;
 }
 export function canQueue(path, method) {
-    return method === 'POST' && (/^\/operations\/(receipts|productions|orders|payments|expenses|returns|wage-requests|work-days|cash)$/.test(path) || /^\/operations\/(productions\/[^/]+\/(post|cancel)|receipts\/[^/]+\/pay|wage-requests\/[^/]+\/(reply|propose|post|reject)|cash\/[^/]+\/(allocate|reverse)|receipt-drafts\/[^/]+\/post|expenses\/[^/]+\/reverse)$/.test(path)) || method === 'PATCH' && /^\/operations\/orders\/[^/]+$/.test(path);
+    return method === 'POST' && (/^\/operations\/(receipts|productions|orders|payments|advances|expenses|returns|wage-requests|work-days|cash)$/.test(path) || /^\/operations\/(productions\/[^/]+\/(post|cancel)|receipts\/[^/]+\/pay|wage-requests\/[^/]+\/(reply|propose|post|reject)|cash\/[^/]+\/(allocate|reverse)|receipt-drafts\/[^/]+\/post|expenses\/[^/]+\/reverse)$/.test(path)) || method === 'PATCH' && /^\/operations\/orders\/[^/]+$/.test(path);
 }
 export async function cached(path) {
     const saved = await readCache(owner() + ':' + path);

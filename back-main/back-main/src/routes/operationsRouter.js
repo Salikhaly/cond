@@ -145,6 +145,7 @@ const repPayroll=require('../services/representativePayrollService');
 router.post('/representative-payroll/preview',wrap(req=>repPayroll.preview(req.user,req.body)));
 router.post('/representative-payroll/post',wrap(req=>{if(!req.body.requestId)throw ApiError.badRequest('Изменение зарплаты отправляется сотруднику на согласование');return require('../services/wageRequestService').post(req.user,req.body.requestId,req.body);}));
 router.post('/payments', wrap(req => service.payment(req.user, req.body)));
+router.post('/advances', wrap(req => service.advance(req.user, req.body)));
 const workRequests=require('../services/wageRequestService'),dailyPay=require('../services/dailyPayService');
 router.get('/wage-requests',wrap(async req=>{if(sync.cloud()){const data=await sync.dashboard(req.user);return {wageRequests:data.wageRequests||[],wageRequestEvents:data.wageRequestEvents||[]};}return workRequests.visible(req.user);}));
 router.post('/wage-requests',wrap(req=>workRequests.create(req.user,req.body)));

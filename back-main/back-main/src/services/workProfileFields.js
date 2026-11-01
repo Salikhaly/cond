@@ -5,5 +5,6 @@ module.exports=b=>{
  if(fields.photo&&!/^data:image\/(jpeg|png|webp);base64,[a-z0-9+/=]+$/i.test(fields.photo))throw ApiError.badRequest('Фото — JPG, PNG или WebP');
  if(fields.instagram&&!/^https:\/\/(?:www\.)?instagram\.com\/[a-z0-9_.]+\/?$/i.test(fields.instagram))throw ApiError.badRequest('Instagram — ссылка вида https://instagram.com/имя');
  if(fields.tiktok&&!/^https:\/\/(?:www\.)?tiktok\.com\/@[a-z0-9_.]+\/?$/i.test(fields.tiktok))throw ApiError.badRequest('TikTok — ссылка вида https://tiktok.com/@имя');
+ if(b.individualRate!==undefined){if(b.individualRate===null||b.individualRate==='')fields.individualRate=null;else{const n=Number(b.individualRate);if(!['string','number'].includes(typeof b.individualRate)||!Number.isFinite(n)||n<0||n>1e7||Math.abs(n*100-Math.round(n*100))>1e-6)throw ApiError.badRequest('Проверьте индивидуальную ставку');fields.individualRate=Math.round((n+Number.EPSILON)*100)/100;}}
  const weekDays=b.weekDays??[];if(!Array.isArray(weekDays)||weekDays.some(d=>!Number.isInteger(d)||d<0||d>6)||new Set(weekDays).size!==weekDays.length)throw ApiError.badRequest('Проверьте график');return {...fields,weekDays};
 };

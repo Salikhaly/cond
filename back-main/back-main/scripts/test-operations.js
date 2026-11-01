@@ -241,6 +241,7 @@ async function main() {
     await require('./test-workday')({call,check,admin,firm,dash,d});
     await require('./test-admin-catalog')({call,check,admin,firm,worker,dash});
     await require('./test-returns')({call,check,admin,firm,worker,dash});
+    await require('./test-receipts-advances')({call,check,admin,worker,dash,d,product});
     console.log(`\n${count} integration checks passed in isolated database ${database}`);
 }
 main().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => {

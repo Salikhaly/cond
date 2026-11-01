@@ -1,21 +1,32 @@
-import React,{useMemo,useState} from 'react';
-import ResultOptions from './ResultOptions';
-import {financialMetrics} from './financialMetrics';
-import {moneyFmt,today} from './api';
-import {Field} from './Fields';
-import {shift} from './ownerMetrics';
-import MiniSalesChart from './MiniSalesChart';
+import React, { useMemo, useState } from 'react';
+import { expenseMetrics } from './expenseMetrics';
+import { moneyFmt, today } from './api';
+import { Field, Empty } from './Fields';
+import { shift } from './ownerMetrics';
+import { Donut } from './ReportCharts';
 import Icon from './Icon';
-export default function OwnerHomeSummary({data,onNavigate}){
- const anchor=data.presentationDate||today(),[period,setPeriod]=useState('month'),[from,setFrom]=useState(anchor.slice(0,7)+'-01'),[to,setTo]=useState(anchor),[withCounts,setWithCounts]=useState(false),[withPersonal,setWithPersonal]=useState(false);
- const f=useMemo(()=>financialMetrics(data,from,to,withCounts),[data,from,to,withCounts]);
- const choose=v=>{setPeriod(v);if(v==='today'){setFrom(anchor);setTo(anchor);}if(v==='week'){setFrom(shift(anchor,-6));setTo(anchor);}if(v==='month'){setFrom(anchor.slice(0,7)+'-01');setTo(anchor);}};
- const report=view=>onNavigate('finance',{kind:'report-period',from,to,view});
- return <section className="op-home-money studio-finance"><div className="op-section-heading"><h2>Бизнес в цифрах</h2><button className="ghost" onClick={()=>report('summary')}>Отчёт <Icon name="forward" size={15}/></button></div><div className="op-period-pills" role="group" aria-label="Период на главной">{[['today','Сегодня'],['week','Неделя'],['month','Месяц'],['custom','Даты']].map(([id,label])=><button key={id} className={period===id?'active':''} aria-pressed={period===id} onClick={()=>choose(id)}>{label}</button>)}</div>{period==='custom'&&<div className="op-form-grid"><Field label="С даты" type="date" value={from} max={to} onChange={e=>setFrom(e.target.value)}/><Field label="По дату" type="date" value={to} min={from} onChange={e=>setTo(e.target.value)}/></div>}
- <button className="studio-sales-card" aria-label={'Продажи '+moneyFmt(f.margin.revenue)+' ₸. Открыть отчёт по клиентам'} onClick={()=>report('clients')}><span className="studio-sales-top"><span><span className="studio-sales-label">Продажи</span><strong>{moneyFmt(f.margin.revenue)} <small>₸</small></strong></span><span className="studio-sales-symbol"><Icon name="finance" size={25}/></span></span><MiniSalesChart rows={f.margin.rows} from={from} to={to}/><span className="studio-sales-bottom"><span>{from.split('-').reverse().join('.')} — {to.split('-').reverse().join('.')}</span><span>Подробнее <Icon name="forward" size={14}/></span></span></button>
- <div className="studio-finance-grid"><button className={'op-home-profit studio-profit'+(f.profit==null?' missing':'')} onClick={()=>report('margin')}><span><Icon name="finance" size={16}/>Операционная прибыль</span><strong className={f.profit!=null&&f.profit<0?'op-margin-alert':''}>{f.profit==null?'Не рассчитана':moneyFmt(f.profit)+' ₸'}</strong><small>{f.profit==null?'Причина в отчёте':'До налогов'} <Icon name="forward" size={13}/></small></button><button className="studio-expense-summary" onClick={()=>onNavigate('expenses')}><span><Icon name="expense" size={16}/>{f.expenses.complete?'Расходы бизнеса':'Расходы · известно'}</span><strong>{moneyFmt(f.operating)} ₸</strong><small>За выбранный период <Icon name="forward" size={13}/></small></button></div>
- {f.expenses.unknown.length>0&&<button className="studio-finance-notice" onClick={()=>onNavigate('expenses')}><span>!</span>Разобрать расходы · {f.expenses.unknown.length}<Icon name="forward" size={15}/></button>}
- <div className="studio-debts"><button onClick={()=>onNavigate('shops',{kind:'client-debts'})}><span className="studio-debt-icon incoming"><Icon name="shops" size={18}/></span><span><small>Клиенты должны</small><b>{moneyFmt(data.tradeTotals?.customerDebt)} ₸</b></span><Icon name="forward" size={15}/></button><button onClick={()=>onNavigate('suppliers')}><span className="studio-debt-icon outgoing"><Icon name="suppliers" size={18}/></span><span><small>Поставщикам</small><b>{moneyFmt(data.tradeTotals?.supplierDebt)} ₸</b></span><Icon name="forward" size={15}/></button></div>
- <details className="op-help cond-result-settings"><summary>Настроить расчёт</summary><ResultOptions withCounts={withCounts} withPersonal={withPersonal} onCounts={setWithCounts} onPersonal={setWithPersonal}/><p>Долги показаны на сегодня.</p></details>{withPersonal&&<div className="op-personal-result"><div><span>Личные траты</span><button className="ghost" onClick={()=>onNavigate('expenses',{kind:'personal'})}>{moneyFmt(f.personal)} ₸ →</button></div><div><span>После личных трат</span><strong>{f.profit==null?'Не рассчитана':moneyFmt(f.profit-f.personal)+' ₸'}</strong></div></div>}
- </section>;
+
+export default function OwnerHomeSummary({ data, onNavigate }) {
+    const anchor = data.presentationDate || today();
+    const [period, setPeriod] = useState('week');
+    const [from, setFrom] = useState(shift(anchor, -6));
+    const [to, setTo] = useState(anchor);
+    const expenses = useMemo(() => expenseMetrics(data, from, to), [data, from, to]);
+    const categories = expenses.categories.filter(row => Number(row.amount) > 0);
+    const top = categories[0];
+    const choose = value => {
+        setPeriod(value);
+        if (value === 'today') { setFrom(anchor); setTo(anchor); }
+        if (value === 'week') { setFrom(shift(anchor, -6)); setTo(anchor); }
+        if (value === 'month') { setFrom(anchor.slice(0, 7) + '-01'); setTo(anchor); }
+    };
+    return <section className="op-card op-infographic op-expenses-summary">
+        <div className="op-section-heading"><div><span className="op-eyebrow">РАСХОДЫ</span><h2>{moneyFmt(expenses.total)} <small>₸</small></h2><p className="op-muted">За выбранный период</p></div><button className="ghost" onClick={() => onNavigate('expenses')}>Все <Icon name="forward" size={15} /></button></div>
+        <div className="op-period-pills" role="group" aria-label="Период расходов">
+            {[['today', 'Сегодня'], ['week', 'Неделя'], ['month', 'Месяц'], ['custom', 'Даты']].map(([id, label]) => <button key={id} className={period === id ? 'active' : ''} aria-pressed={period === id} onClick={() => choose(id)}>{label}</button>)}
+        </div>
+        {period === 'custom' && <div className="op-form-grid"><Field label="С даты" type="date" value={from} max={to} onChange={e => setFrom(e.target.value)} /><Field label="По дату" type="date" value={to} min={from} onChange={e => setTo(e.target.value)} /></div>}
+        {categories.length ? <Donut rows={categories} value="amount" unit="₸" label="Расходы по статьям" /> : <Empty>Расходов за период нет</Empty>}
+        {top && <div className="op-infographic-foot"><span>Крупнейшая статья</span><b>{top.name}</b><strong>{moneyFmt(top.amount)} ₸</strong></div>}
+    </section>;
 }

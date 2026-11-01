@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { queued, saveQueued, removeQueued } from './offline';
 import { flushQueue, fmt } from './api';
-const label = path => path.includes('/cash')?'Оплата / распределение денег':path.includes('/receipt-drafts')?'Проведение прихода':path.includes('/expenses')?'Расход / исправление':path.includes('/wage-requests')?'Запрос / ответ на согласование':path.includes('/work-days')?'Отметка смены': path.includes('/returns') ? 'Запрос на возврат / обмен' : path.includes('/post') ? 'Проведение выпуска' : path.includes('/productions') ? 'Выработка' : path.includes('/receipts') ? 'Приход' : path.includes('/payments') ? 'Выплата' : path.includes('/orders') ? 'Заявка / отгрузка' : 'Расход';
+const label = path => path.includes('/cash')?'Оплата / распределение денег':path.includes('/receipt-drafts')?'Проведение прихода':path.includes('/expenses')?'Расход / исправление':path.includes('/wage-requests')?'Запрос / ответ на согласование':path.includes('/work-days')?'Отметка смены': path.includes('/returns') ? 'Запрос на возврат / обмен' : path.includes('/post') ? 'Проведение выпуска' : path.includes('/productions') ? 'Выработка' : path.includes('/receipts') ? 'Приход' : path.includes('/advances') ? 'Аванс' : path.includes('/payments') ? 'Выплата' : path.includes('/orders') ? 'Заявка / отгрузка' : 'Расход';
 export default function PhoneQueue({ refresh }) {
     const [rows, setRows] = useState([]), [sending, setSending] = useState(false);
     const update = () => queued().then(setRows).catch(() => {});

@@ -31,9 +31,14 @@ async function catalog(user) {
     const variants=await M.PackagingVariant.findAll();
     const used=await M.Production.findAll({where:{status:{[Op.in]:['draft','posted']}},attributes:['productId'],group:['productId']});
     const personal=user.role==='employee'?await require('./workPolicyService').at(user.id,require('./businessDay').today()):null;
+    const profile=user.role==='employee'?await M.WorkProfile.findByPk(user.id):null;
     return products.map(p => {
         const packKg=variants.find(v=>v.productId===p.id)?.kgPerPack??null;
-        if (user.role === 'employee') {const rate=personal?.pieceRates?.find(r=>r.productId===p.id),piece=!personal||personal.mode==='piece',pack=variants.find(v=>v.productId===p.id);return {id:p.id,name:p.name,weight:p.weight,packKg,wageMode:personal?.mode||'piece',payRateForKg:piece?(rate?Number(rate.rate)/(rate.unit==='pack'?Number(packKg):1):pack?Number(pack.laborPerPack)/Number(pack.kgPerPack):Number(p.priceForEmployee)):null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):Number(pack.laborPerPack)):null};}
+        if (user.role === 'employee') {
+            const rate=personal?.pieceRates?.find(r=>r.productId===p.id),piece=!personal||personal.mode==='piece',pack=variants.find(v=>v.productId===p.id);
+            const perKg=rate?Number(rate.rate)/(rate.unit==='pack'?Number(packKg):1):profile?.individualRate!=null?Number(profile.individualRate):pack?Number(pack.laborPerPack)/Number(pack.kgPerPack):Number(p.priceForEmployee);
+            return {id:p.id,name:p.name,weight:p.weight,packKg,wageMode:personal?.mode||'piece',payRateForKg:piece?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
+        }
         const s = stocks.find(s => s.productId === p.id);
         const display=displays.find(d=>d.productId===p.id);
         const common = {stockVerified:p.additional?.stockVerified!==false||stockCounts.some(c=>c.lines.some(l=>l.kind==='product'&&Number(l.itemId)===p.id)), packKg,salePrice:sellingPrices.find(x=>x.productId===p.id)?.price ?? null,id: p.id, name: p.name, weight: p.weight, photo:display?.photo || '', description:display?.description || '', image:p.image || '', availableKg: round(Number(s.kg) - Number(s.reservedKg)) };
@@ -57,11 +62,16 @@ async function calculate(productId, kg, tx, workerId, workDate) {
     const materialCost = round(lines.reduce((s, l) => s + l.cost, 0));
     const variant=await M.PackagingVariant.findByPk(product.id,{transaction:tx});
     const policy=workerId?await require('./workPolicyService').at(workerId,workDate||require('./businessDay').today(),tx):null;
+    const profile=workerId?await M.WorkProfile.findByPk(workerId,{transaction:tx}):null;
     const piece=!policy||policy.mode==='piece';
     const personalRate=policy?.pieceRates?.find(r=>r.productId===product.id);
-    const laborCost=piece?money(personalRate?kg*Number(personalRate.rate)/(personalRate.unit==='pack'?Number(variant?.kgPerPack||product.weight):1):variant?kg/Number(variant.kgPerPack)*Number(variant.laborPerPack):kg*Number(product.priceForEmployee)):0;
+    const personalPerKg=personalRate?Number(personalRate.rate)/(personalRate.unit==='pack'?Number(variant?.kgPerPack||product.weight):1):null;
+    const profileRate=profile?.individualRate!=null?Number(profile.individualRate):null;
+    const effectiveRate=personalPerKg!=null?personalPerKg:profileRate!=null?profileRate:null;
+    const laborCost=piece?money(effectiveRate!=null?kg*effectiveRate:variant?kg/Number(variant.kgPerPack)*Number(variant.laborPerPack):kg*Number(product.priceForEmployee)):0;
+    const reportedRate=effectiveRate!=null?effectiveRate:Number(product.priceForEmployee);
     const overheadCost = round(Number(recipe.overhead) * kg / Number(recipe.outputKg));
-    return { productId: product.id, productName: product.name, kg, recipeVersion: recipe.version, workMode:policy?.mode||'piece',ratePerKg:piece?Number(product.priceForEmployee):0, lines, materialCost, laborCost, overheadCost, totalCost: round(materialCost + laborCost + overheadCost), costPerKg: round((materialCost + laborCost + overheadCost) / kg), enough: lines.every(l => l.enough) };
+    return { productId: product.id, productName: product.name, kg, recipeVersion: recipe.version, workMode:policy?.mode||'piece',ratePerKg:piece?reportedRate:0, lines, materialCost, laborCost, overheadCost, totalCost: round(materialCost + laborCost + overheadCost), costPerKg: round((materialCost + laborCost + overheadCost) / kg), enough: lines.every(l => l.enough) };
 }
 
 module.exports = {
@@ -113,7 +123,9 @@ module.exports = {
     async material(user, body) {
         admin(user);
         if (!['кг', 'л', 'шт'].includes(body.unit)) throw ApiError.badRequest('Единица: кг, л или шт');
-        return M.Material.create({ name: text(body.name, 'название'), unit: body.unit });
+        const packUnit = body.packUnit == null || body.packUnit === '' ? null : text(body.packUnit, 'единицу упаковки').slice(0, 32);
+        const unitsPerPack = body.unitsPerPack == null || body.unitsPerPack === '' ? null : num(body.unitsPerPack, 'штук в коробке');
+        return M.Material.create({ name: text(body.name, 'название'), unit: body.unit, packUnit, unitsPerPack });
     },
     async receipt(user, b, transaction) {
         admin(user);
@@ -125,14 +137,24 @@ module.exports = {
         if (!input.length || input.length > 100) throw ApiError.badRequest('Добавьте материалы');
         const lines=input.map(l=>{
             const materialId=text(l.materialId,'материал');
+            const shortageReason = l.shortageReason == null || l.shortageReason === '' ? null : text(l.shortageReason, 'причину недопоставки').slice(0, 64);
+            const shortageComment = l.shortageComment == null || l.shortageComment === '' ? null : text(l.shortageComment, 'комментарий к недопоставке').slice(0, 500);
+            if (shortageReason === 'Другое' && !shortageComment) throw ApiError.badRequest('Для причины «Другое» укажите комментарий');
             if(l.purchasePack){
-                const count=num(l.purchasePack.count,'количество упаковок'),size=num(l.purchasePack.size,'количество в упаковке'),price=num(l.purchasePack.price,'цену упаковки',true);
-                if(Math.abs(price-money(price))>1e-8)throw ApiError.badRequest('Цена упаковки — до двух знаков после запятой');
+                const count=l.purchasePack.count===undefined||l.purchasePack.count===null||l.purchasePack.count===''?1:num(l.purchasePack.count,'количество упаковок');
+                const size=num(l.purchasePack.size,'количество в упаковке');
+                const hasUnitPrice=l.purchasePack.pricePerUnit!==undefined&&l.purchasePack.pricePerUnit!==null&&l.purchasePack.pricePerUnit!=='';
+                const pricePerUnit=hasUnitPrice?num(l.purchasePack.pricePerUnit,'цену за штуку',true):null;
+                const price=hasUnitPrice?money(pricePerUnit*size):num(l.purchasePack.price,'цену упаковки',true);
+                if(!hasUnitPrice&&Math.abs(price-money(price))>1e-8)throw ApiError.badRequest('Цена упаковки — до двух знаков после запятой');
+                const unitPrice=hasUnitPrice?pricePerUnit:round(price/size);
                 const quantity=num(count*size,'общее количество');
-                return {materialId,quantity,unitCost:round(price/size),lineTotal:money(count*price),purchasePack:{count,size,price}};
+                const packUnit=l.purchasePack.unit==null||l.purchasePack.unit===''?'коробка':text(l.purchasePack.unit,'единицу упаковки').slice(0,32);
+                const lineTotal=hasUnitPrice?money(quantity*unitPrice):money(count*price);
+                return {materialId,quantity,unitCost:unitPrice,lineTotal,purchasePack:{count,size,price,pricePerUnit:unitPrice,unit:packUnit},boxCount:count,unitsPerBox:size,pricePerUnit:unitPrice,packUnit,shortageReason,shortageComment};
             }
             const quantity=num(l.quantity,'количество'),unitCost=num(l.unitCost,'цена',true);
-            return {materialId,quantity,unitCost,lineTotal:money(quantity*unitCost)};
+            return {materialId,quantity,unitCost,lineTotal:money(quantity*unitCost),shortageReason,shortageComment};
         }).sort((a,b)=>a.materialId.localeCompare(b.materialId));
         if (new Set(lines.map(l => l.materialId)).size !== lines.length) throw ApiError.badRequest('Один материал указан несколько раз');
         if (b.paid !== undefined && typeof b.paid !== 'boolean') throw ApiError.badRequest('Укажите, оплачен ли приход');
@@ -352,6 +374,8 @@ module.exports = {
     async payment(user, b) {
         admin(user);
         const method=b.method||'unknown';if(!['cash','kaspi','bank','unknown'].includes(method))throw ApiError.badRequest('Выберите способ выплаты зарплаты');
+        const kind=b.kind===undefined||b.kind===null||b.kind===''?'salary':b.kind;
+        if(!['salary','advance'].includes(kind))throw ApiError.badRequest('Выберите вид выплаты');
         const workerId = num(b.workerId, 'сотрудник'), amount = money(num(b.amount, 'сумма'));
         const bounds = b.salaryMonth ? require('./payrollPeriod')(b.salaryMonth) : null;
         if (amount <= 0) throw ApiError.badRequest('Минимальная выплата 0,01 ₸');
@@ -364,16 +388,23 @@ module.exports = {
             const excess=amount>Math.max(0,round(accrued-paid));
             if(excess&&b.allowOverAdvance!==true)throw ApiError.badRequest('Подтвердите выдачу аванса сверх начисленного');
             if(amount>99999999.99)throw ApiError.badRequest('Слишком большая сумма выплаты');
-            const payment = await M.Payment.create({ workerId, amount, date: date(b.date), note: String(b.note || '').slice(0, 250) }, { transaction: t });
-            if(excess)await M.PaymentPermission.create({paymentId:payment.id,actorId:user.id,reason:String(b.note||'Аванс сверх начисленного').slice(0,250)},{transaction:t});
+            const note=String(b.note || (kind==='advance'?'Аванс':'Выплата зарплаты')).slice(0, 250);
+            const payment = await M.Payment.create({ workerId, amount, date: date(b.date), note, kind, salaryMonth: b.salaryMonth || null }, { transaction: t });
+            if(excess)await M.PaymentPermission.create({paymentId:payment.id,actorId:user.id,reason:note},{transaction:t});
             if (bounds) await M.PaymentScope.create({paymentId:payment.id,salaryMonth:b.salaryMonth},{transaction:t});
             const advances = await bridge.payment(payment, t);
-            const [category] = await OutcomeCategory.findOrCreate({ where: { name: worker.role==='representative'?'Выплата зарплаты (представители)':'Выплата зарплаты (производство)' }, transaction: t });
-            const out=await Outcome.create({ recipient: worker.name, name: 'Выплата зарплаты', unitPrice: amount, quantity: 1, totalAmount: amount, outcomeCategoryId: category.id, date: b.date, advanceId: advances[0] }, { transaction: t });
+            const categoryName=kind==='advance'?'Аванс работникам':worker.role==='representative'?'Выплата зарплаты (представители)':'Выплата зарплаты (производство)';
+            const [category] = await OutcomeCategory.findOrCreate({ where: { name: categoryName }, transaction: t });
+            const out=await Outcome.create({ recipient: worker.name, name: kind==='advance'?'Аванс работнику':'Выплата зарплаты', unitPrice: amount, quantity: 1, totalAmount: amount, outcomeCategoryId: category.id, date: b.date, advanceId: advances[0] }, { transaction: t });
             await require('./moneyService').assign('outcome:'+out.id,{...b,method},user,t);
-            await M.PayrollPaymentInfo.create({paymentId:payment.id,method,comment:String(b.note||'').slice(0,250),actorId:user.id,actorName:user.name,outcomeId:out.id,advanceIds:advances},{transaction:t});
+            await M.PayrollPaymentInfo.create({paymentId:payment.id,method,comment:note,actorId:user.id,actorName:user.name,outcomeId:out.id,advanceIds:advances},{transaction:t});
             return payment;
         });
+    },
+    async advance(user, b) {
+        admin(user);
+        const month=b.salaryMonth||((typeof b.date==='string'&&/^\d{4}-\d{2}/.test(b.date))?b.date.slice(0,7):undefined);
+        return module.exports.payment(user,{...b,kind:'advance',allowOverAdvance:b.allowOverAdvance!==false,...(month?{salaryMonth:month}:{})});
     },
     async exchange(user) {
         admin(user);

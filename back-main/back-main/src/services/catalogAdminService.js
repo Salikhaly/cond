@@ -5,6 +5,7 @@ const {Op}=require('sequelize');
 const admin=u=>{if(u.role!=='super_admin')throw ApiError.forbiddenRequest('Только администратор');};
 const name=v=>{if(typeof v!=='string'||!v.trim()||v.length>250)throw ApiError.badRequest('Укажите название');return v.trim();};
 const number=(v,zero=false)=>{const n=Number(v);if(!['number','string'].includes(typeof v)||String(v).trim()===''||!Number.isFinite(n)||(zero?n<0:n<=0)||n>1e9||Math.abs(n-Math.round(n*10000)/10000)>1e-8)throw ApiError.badRequest('Проверьте вес и ставку');return n;};
+const optionalText=(v,label,max)=>{if(v===undefined)return undefined;if(v===null||v==='')return null;if(typeof v!=='string'||!v.trim()||v.length>max)throw ApiError.badRequest('Проверьте '+label);return v.trim();};
 module.exports={
  async product(user,id,b){admin(user);return db.transaction(async t=>{
   const p=await Product.findByPk(id,{transaction:t,lock:t.LOCK.UPDATE});if(!p)throw ApiError.notFound('Товар не найден');
@@ -50,6 +51,11 @@ module.exports={
    if(!b.active){if(Number(m.quantity)>0)throw new ApiError(409,'Материал ещё есть на складе');const recipes=await M.Recipe.findAll({where:{active:true},transaction:t});if(recipes.some(r=>r.lines.some(l=>l.materialId===m.id)))throw new ApiError(409,'Материал используется в рецептуре. Сначала измените состав');}
    return m.update({active:b.active},{transaction:t});
   }
-  return m.update({name:name(b.name)},{transaction:t});
+  const values={};
+  if(b.name!==undefined)values.name=name(b.name);
+  if(b.packUnit!==undefined)values.packUnit=optionalText(b.packUnit,'единицу упаковки',32);
+  if(b.unitsPerPack!==undefined)values.unitsPerPack=b.unitsPerPack===null||b.unitsPerPack===''?null:number(b.unitsPerPack);
+  if(!Object.keys(values).length)throw ApiError.badRequest('Нет данных для сохранения');
+  return m.update(values,{transaction:t});
  });}
 };

@@ -26,9 +26,11 @@ import Icon,{Brand} from './Icon';
 import ExpenseDirectory from './ExpenseDirectory';
 import Money from './Money';
 import HistoryWorkbook from './HistoryWorkbook';
+import NotificationCenter from './NotificationCenter';
+import ApprovalsScreen from './ApprovalsScreen';
 const roles = { super_admin: 'Администратор', employee: 'Работник производства', representative: 'Торговый представитель' };
 const tabs = {
-    super_admin: [['overview', '◫', 'Обзор'], ['materials', '▧', 'Приходы и склад'], ['catalog', '◈', 'Готовые товары'], ['shops', '▣', 'Клиенты'],['suppliers','▣','Поставщики'], ['recipes', '⌘', 'Калькуляции'], ['production', '◈', 'Производство'], ['orders', '▤', 'Заявки'], ['returns','↩','Обмен / Возврат'], ['expenses','expense','Расходы'],['directory','directory','Справочники'],['money','money','Деньги'],['inventory','▦','Инвентаризация'],['payroll', '₸', 'Команда и зарплата'], ['finance', '▥', 'Отчёты и финансы'], ['history','directory','Данные февраля'], ['users', '⚙', 'Настройки']],
+    super_admin: [['overview', '◫', 'Обзор'], ['approvals', '✓', 'Согласования'], ['materials', '▧', 'Приходы и склад'], ['catalog', '◈', 'Готовые товары'], ['shops', '▣', 'Клиенты'],['suppliers','▣','Поставщики'], ['recipes', '⌘', 'Калькуляции'], ['production', '◈', 'Производство'], ['orders', '▤', 'Заявки'], ['returns','↩','Обмен / Возврат'], ['expenses','expense','Расходы'],['directory','directory','Справочники'],['money','money','Деньги'],['inventory','▦','Инвентаризация'],['payroll', '₸', 'Команда и зарплата'], ['finance', '▥', 'Отчёты и финансы'], ['history','directory','Данные февраля'], ['users', '⚙', 'Настройки']],
     employee: [['production', '◈', 'Моя выработка'], ['payroll', '₸', 'Моя зарплата']],
     representative: [['orders', '▤', 'Каталог и заказы'],['returns','↩','Обмен / Возврат'],['shops','▣','Мои магазины'],['payroll','₸','Моя зарплата']]
 };
@@ -88,9 +90,16 @@ export default function Workspace() {
     useEffect(() => {
         if (!user) return;
         load().catch(e => setNotice({ error: true, text: e.message }));
-        const timer = setInterval(() => { if (!running.current) load().catch(() => {}); }, 30000);
-        return () => clearInterval(timer);
+        const timer = setInterval(() => { if (!running.current) load().catch(() => {}); }, 20000);
+        const wake = () => { if (document.visibilityState === 'visible' && !running.current) load().catch(() => {}); };
+        document.addEventListener('visibilitychange', wake);
+        return () => { clearInterval(timer); document.removeEventListener('visibilitychange', wake); };
     }, [user, load]);
+    useEffect(() => {
+        if (!notice || notice.error) return;
+        const timer = setTimeout(() => setNotice(null), 4200);
+        return () => clearTimeout(timer);
+    }, [notice]);
     async function run(action, success) {
 
         if (running.current) return;
@@ -115,11 +124,11 @@ export default function Workspace() {
     const secondary = nav.filter(([id]) => !primary.some(([main]) => main === id));
     const selectTab = (id, action = null) => { if(id==='finance'&&action?.kind==='expenses')id='expenses';if(id==='materials'&&action?.kind==='counts')id='inventory'; mainRef.current?.scrollTo({top:0});setIntent(action); setTab(id); setNotice(null); setMore(false);setProfileOpen(false);setSearchOpen(false); };
     return <div className={'op-app studio-app op-role-' + user.role+' suite-section-'+allowedTab}><ActionSearch open={searchOpen} onClose={()=>setSearchOpen(false)} nav={nav} data={data||{}} onNavigate={selectTab}/>
-        <aside className="op-sidebar"><Brand/><span className="op-side-caption">УПРАВЛЕНИЕ ПРОИЗВОДСТВОМ</span><nav className="op-desktopnav" aria-label="Разделы">{nav.map(([id, icon, label]) => <button key={id} aria-current={allowedTab === id ? 'page' : undefined} className={allowedTab === id ? 'active' : ''} onClick={() => selectTab(id)}><span aria-hidden="true"><Icon name={id}/></span>{label}{id === 'orders' && data?.orders?.some(o => o.status === 'submitted') && <i />}</button>)}</nav>
-<nav className="op-mobilenav" aria-label="Разделы на телефоне">{primary.map(([id, icon, label]) => <button key={id} aria-current={allowedTab === id ? 'page' : undefined} className={allowedTab === id ? 'active' : ''} onClick={() => selectTab(id)}><span aria-hidden="true"><Icon name={id}/></span>{id === 'materials' ? 'Приходы' : id === 'finance' ? 'Отчёты' : label}</button>)}{secondary.length > 0 && <button aria-expanded={more} className={secondary.some(([id]) => id === allowedTab) ? 'active' : ''} onClick={() => setMore(v => !v)}><span aria-hidden="true"><Icon name="more"/></span>Ещё</button>}</nav>
+        <aside className="op-sidebar"><Brand/><span className="op-side-caption">УПРАВЛЕНИЕ ПРОИЗВОДСТВОМ</span><nav className="op-desktopnav" aria-label="Разделы">{nav.map(([id, icon, label]) => <button key={id} data-section={id} aria-current={allowedTab === id ? 'page' : undefined} className={allowedTab === id ? 'active' : ''} onClick={() => selectTab(id)}><span aria-hidden="true"><Icon name={id}/></span>{label}{id === 'orders' && data?.orders?.some(o => o.status === 'submitted') && <i />}</button>)}</nav>
+<nav className="op-mobilenav" aria-label="Разделы на телефоне">{primary.map(([id, icon, label]) => <button key={id} data-section={id} aria-current={allowedTab === id ? 'page' : undefined} className={allowedTab === id ? 'active' : ''} onClick={() => selectTab(id)}><span aria-hidden="true"><Icon name={id}/></span>{id === 'materials' ? 'Приходы' : id === 'finance' ? 'Отчёты' : label}</button>)}{secondary.length > 0 && <button aria-expanded={more} className={secondary.some(([id]) => id === allowedTab) ? 'active' : ''} onClick={() => setMore(v => !v)}><span aria-hidden="true"><Icon name="more"/></span>Ещё</button>}</nav>
 {more && <div className="op-more-menu">{secondary.map(([id, icon, label]) => <button key={id} onClick={() => selectTab(id)}><Icon name={id}/> {label}</button>)}</div>}<div className="op-side-bottom"><span className="op-local-dot" />{process.env.PUBLIC_DEMO==='true'?'Демонстрация':process.env.LOCAL_DEMO === 'true' ? 'Локальная версия' : 'Рабочая система'}<p>Сырьё → производство → отгрузка</p></div></aside>
-        <div className="op-main" ref={mainRef}><header className="op-topbar"><div><span className="op-breadcrumb">Рабочее место /</span><h1><span className={'suite-section-icon section-'+allowedTab}><Icon name={allowedTab}/></span>{allowedTab==='overview'?'COND':current?.[2]}</h1></div><div className="studio-header-actions">{['finance','payroll','materials','suppliers','shops','catalog','expenses','inventory','recipes'].includes(allowedTab)&&<ExportActions compact title={current?.[2]||'Отчёт'}/>}<button className="studio-header-search" aria-label="Поиск действий" disabled={!data} onClick={()=>{setSearchOpen(true);setProfileOpen(false);setMore(false);}}><Icon name="search"/></button><div className="cond-profile-wrap"><button className="cond-profile-button" aria-label="Профиль" aria-expanded={profileOpen} onClick={()=>setProfileOpen(v=>!v)}>{user.name?.slice(0,1)}</button>{profileOpen&&<div className="cond-profile-menu"><strong>{user.name}</strong><small>{user.role==='super_admin'&&user.authority?.owner?'Владелец бизнеса':roles[user.role]}</small><button onClick={logout}>Выйти из аккаунта</button><button className="cond-profile-close" onClick={()=>setProfileOpen(false)}>Закрыть</button></div>}</div></div></header>
-            <main className="op-content" id="main-content"><PhoneQueue refresh={load} /><Connection user={user} run={run} busy={busy} offline={Boolean(data?._offline)} />{data?._offline && <div className="op-alert" role="status">Работа без связи · данные на {new Date(data._savedAt).toLocaleString("ru-RU")} · остатки предварительные.</div>}{!online&&!data?._offline && <div className="op-alert error" role="alert">Связь недоступна. Приходы, выработка, заявки и выплаты сохраняются в очереди на телефоне.</div>}{notice && <div className={'op-alert ' + (notice.error ? 'error' : 'success')} role={notice.error ? 'alert' : 'status'}>{notice.text}<button className="ghost" aria-label="Закрыть уведомление" onClick={() => setNotice(null)}>×</button></div>}
+        <div className="op-main" ref={mainRef}><header className="op-topbar"><div><span className="op-breadcrumb">Рабочее место /</span><h1><span className={'suite-section-icon section-'+allowedTab}><Icon name={allowedTab}/></span>{allowedTab==='overview'?'COND':current?.[2]}</h1></div><div className="studio-header-actions">{['finance','payroll','materials','suppliers','shops','catalog','expenses','inventory','recipes'].includes(allowedTab)&&<ExportActions compact title={current?.[2]||'Отчёт'}/>}<NotificationCenter data={data||{}} user={user} onNavigate={selectTab} onNotice={setNotice}/><button className="studio-header-search" aria-label="Поиск действий" disabled={!data} onClick={()=>{setSearchOpen(true);setProfileOpen(false);setMore(false);}}><Icon name="search"/></button><div className="cond-profile-wrap"><button className="cond-profile-button" aria-label="Профиль" aria-expanded={profileOpen} onClick={()=>setProfileOpen(v=>!v)}>{user.name?.slice(0,1)}</button>{profileOpen&&<div className="cond-profile-menu"><strong>{user.name}</strong><small>{user.role==='super_admin'&&user.authority?.owner?'Владелец бизнеса':roles[user.role]}</small><button onClick={logout}>Выйти из аккаунта</button><button className="cond-profile-close" onClick={()=>setProfileOpen(false)}>Закрыть</button></div>}</div></div></header>
+            <main className="op-content" id="main-content"><PhoneQueue refresh={load} /><Connection user={user} run={run} busy={busy} offline={Boolean(data?._offline)} />{data?._offline && <div className="op-alert" role="status">Без сети · данные на {new Date(data._savedAt).toLocaleString("ru-RU")}.</div>}{!online&&!data?._offline && <div className="op-alert error" role="alert">Нет сети. Записи сохранятся и отправятся позже.</div>}{notice && <div className={'op-alert ' + (notice.error ? 'error' : 'success')} role={notice.error ? 'alert' : 'status'}>{notice.text}<button className="ghost" aria-label="Закрыть уведомление" onClick={() => setNotice(null)}>×</button></div>}
                 {process.env.PUBLIC_DEMO==='true'&&<div className="op-demo-notice" role="status">Демо · тестовые данные</div>}{data?.presentation && <div className="op-demo-notice" role="status">Демо-база · основной учёт не изменяется</div>}
                 {!data ? <div className="op-card">Загружаем данные… <button className="secondary" onClick={() => run(async () => {}, '')}>Повторить</button></div> : <>
                     
@@ -128,7 +137,8 @@ export default function Workspace() {
                     {allowedTab==='money'&&data?.isOwner&&<Money data={data} onNavigate={selectTab} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab==='expenses'&&<Expenses onNavigate={selectTab} initialAction={intent} data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab==='inventory'&&<StockCounts data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
-                    {allowedTab === 'overview' && <Overview data={data} setTab={selectTab} />}
+                    {allowedTab === 'overview' && <Overview data={data} setTab={selectTab} user={user} />}
+                    {allowedTab === 'approvals' && <ApprovalsScreen data={data} user={user} onNavigate={selectTab} />}
                     {allowedTab === 'materials' && <Materials onPaySupplier={id=>selectTab('suppliers',{kind:'receipt-payment',id})} data={data} run={run} initialAction={intent} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'recipes' && <Recipes initialAction={intent} onNavigate={selectTab} data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'production' && <Production onNavigate={selectTab} data={data} user={user} run={run} initialAction={intent} busy={busy || Boolean(data?.sync?.readOnly)} />}
@@ -156,3 +166,5 @@ import './comfort.css';
 import './ios.css';
 import './studio.css';
 import './suite.css';
+import './approvals.css';
+import './design-system.css';

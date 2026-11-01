@@ -8,6 +8,14 @@ module.exports = async () => db.transaction(async t => {
     await db.query('ALTER TABLE \"work_profiles\" ADD COLUMN IF NOT EXISTS photo TEXT, ADD COLUMN IF NOT EXISTS instagram VARCHAR(255), ADD COLUMN IF NOT EXISTS note TEXT',{transaction:t});
     await db.query('ALTER TABLE "work_policies" ADD COLUMN IF NOT EXISTS "pieceRates" JSONB NOT NULL DEFAULT \'[]\'::jsonb',{transaction:t});
     await db.query('ALTER TABLE work_profiles ADD COLUMN IF NOT EXISTS tiktok VARCHAR(255)',{transaction:t});
+    await db.query('ALTER TABLE work_profiles ADD COLUMN IF NOT EXISTS "individualRate" NUMERIC(16,4)',{transaction:t});
+    await db.query('ALTER TABLE IF EXISTS materials ADD COLUMN IF NOT EXISTS "packUnit" VARCHAR(32), ADD COLUMN IF NOT EXISTS "unitsPerPack" NUMERIC(16,4)',{transaction:t});
+    await db.query('ALTER TABLE IF EXISTS trade_suppliers ADD COLUMN IF NOT EXISTS "defaultUnitsPerPack" NUMERIC(16,4)',{transaction:t});
+    await db.query('ALTER TABLE IF EXISTS material_receipts ADD COLUMN IF NOT EXISTS "boxCount" NUMERIC(16,4), ADD COLUMN IF NOT EXISTS "unitsPerBox" NUMERIC(16,4), ADD COLUMN IF NOT EXISTS "pricePerUnit" NUMERIC(16,4), ADD COLUMN IF NOT EXISTS "packUnit" VARCHAR(32), ADD COLUMN IF NOT EXISTS "lineTotal" NUMERIC(16,4), ADD COLUMN IF NOT EXISTS "shortageReason" VARCHAR(64), ADD COLUMN IF NOT EXISTS "shortageComment" VARCHAR(500)',{transaction:t});
+    await db.query('ALTER TABLE IF EXISTS payroll_payments ADD COLUMN IF NOT EXISTS "kind" VARCHAR(16), ADD COLUMN IF NOT EXISTS "salaryMonth" VARCHAR(7)',{transaction:t});
+    await db.query('CREATE INDEX IF NOT EXISTS material_receipts_date_idx ON material_receipts (date)',{transaction:t});
+    await db.query('CREATE INDEX IF NOT EXISTS material_receipts_supplier_date_idx ON material_receipts (supplier, date)',{transaction:t});
+    await db.query('CREATE INDEX IF NOT EXISTS material_receipts_material_date_idx ON material_receipts ("materialId", date)',{transaction:t});
     await db.query('ALTER TABLE expense_meta ADD COLUMN IF NOT EXISTS "articleId" UUID',{transaction:t});
     await require('../services/expenseArticleService').ensure(t);
     await require('../services/moneyService').ensure(t);

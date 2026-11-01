@@ -1,0 +1,595 @@
+:root {
+    --ds-accent: #0f7a55;
+    --ds-accent-soft: #e9f5ee;
+    --ds-blue: #2f6fed;
+    --ds-blue-soft: #eaf1ff;
+    --ds-orange: #d9822b;
+    --ds-orange-soft: #fff3e3;
+    --ds-purple: #8b5cf6;
+    --ds-purple-soft: #f3edff;
+    --ds-dark: #121814;
+    --ds-ink: #18241e;
+    --ds-muted: #6b7a70;
+    --ds-line: #e3eae5;
+    --ds-bg: #f4f7f5;
+    --ds-card: #ffffff;
+    --ds-danger: #a9433a;
+    --ds-warning: #9a651d;
+    --ds-radius: 20px;
+    --ds-radius-sm: 12px;
+}
+
+.op-app {
+    color: var(--ds-ink);
+    background: var(--ds-bg);
+}
+
+.op-app button,
+.op-app summary,
+.op-app a {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.op-app .op-card {
+    background: var(--ds-card);
+    border: 1px solid var(--ds-line);
+    border-radius: var(--ds-radius);
+    box-shadow: 0 2px 12px #18241e05;
+}
+
+.op-app .op-section-heading {
+    gap: 12px;
+}
+
+.op-app .op-section-heading h2 {
+    font-size: 20px;
+    line-height: 1.25;
+    letter-spacing: -.3px;
+    color: var(--ds-ink);
+}
+
+.op-app .op-section-heading h3 {
+    font-size: 16px;
+    line-height: 1.3;
+    color: var(--ds-ink);
+}
+
+.op-app .op-muted,
+.op-app .op-field-hint {
+    color: var(--ds-muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.op-app .op-eyebrow {
+    color: var(--ds-muted);
+    font-size: 10px;
+    letter-spacing: .1em;
+    font-weight: 650;
+}
+
+.op-app .op-field {
+    margin-bottom: 12px;
+}
+
+.op-app .op-field > span {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ds-muted);
+    font-size: 11px;
+    font-weight: 550;
+    line-height: 1.4;
+}
+
+.op-app .op-field > input,
+.op-app .op-field > select,
+.op-app .op-field > textarea {
+    width: 100%;
+    min-height: 46px;
+    padding: 10px 12px;
+    border: 1px solid var(--ds-line);
+    border-radius: var(--ds-radius-sm);
+    background: #fbfcfb;
+    color: var(--ds-ink);
+    font: inherit;
+    font-size: 15px;
+    line-height: 1.35;
+    box-shadow: none;
+    outline: none;
+}
+
+.op-app .op-field > input:focus,
+.op-app .op-field > select:focus,
+.op-app .op-field > textarea:focus {
+    border-color: #a9cfba;
+    background: #fff;
+    box-shadow: 0 0 0 3px #0f7a5514;
+}
+
+.op-app .op-field > textarea {
+    min-height: 92px;
+    resize: vertical;
+}
+
+.op-app .op-field > input::placeholder,
+.op-app .op-field > textarea::placeholder {
+    color: #a6b2aa;
+}
+
+.op-app .op-form-grid {
+    gap: 10px 12px;
+}
+
+.op-app button.ghost {
+    color: var(--ds-blue) !important;
+}
+
+.op-app button.ghost.danger {
+    color: var(--ds-danger) !important;
+}
+
+.op-app .op-home-metric small {
+    color: var(--ds-blue) !important;
+}
+
+.op-app button.secondary {
+    background: var(--ds-blue-soft) !important;
+    color: var(--ds-blue) !important;
+    border-color: transparent !important;
+}
+
+.op-app .op-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.op-app .cond-money-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.op-app .cond-money-actions button {
+    min-height: 58px;
+    border: 0;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.op-app .cond-money-actions button:first-child {
+    background: var(--ds-dark) !important;
+    color: #fff !important;
+}
+
+.op-app .cond-money-actions button:not(:first-child) {
+    background: var(--ds-blue-soft) !important;
+    color: var(--ds-blue) !important;
+}
+
+.op-app .op-card form .op-actions > button,
+.op-app .op-card form > button:not(.secondary):not(.ghost):not(.danger),
+.op-app .op-card form button:not(.secondary):not(.ghost):not(.danger):not([aria-pressed]),
+.op-app .op-wide-action {
+    min-height: 46px;
+    padding: 11px 16px;
+    border: 0;
+    border-radius: 13px;
+    background: var(--ds-dark) !important;
+    color: #fff !important;
+    font-size: 13px;
+    font-weight: 650;
+}
+
+.op-app .op-card form button:disabled,
+.op-app .op-wide-action:disabled {
+    background: #dfe8e3 !important;
+    color: #6b7a70 !important;
+    opacity: 1;
+}
+
+.op-app .op-card form .op-actions > button.secondary,
+.op-app .op-card form > button.secondary {
+    background: var(--ds-blue-soft);
+    color: var(--ds-blue);
+}
+
+.op-app .op-card form .op-actions > button.ghost,
+.op-app .op-card form > button.ghost {
+    background: transparent;
+    color: var(--ds-blue);
+    padding-left: 8px;
+    padding-right: 8px;
+}
+
+.op-app .op-card form .op-actions > button.danger {
+    background: #fdf2f0;
+    color: var(--ds-danger);
+}
+
+.op-app .op-help {
+    margin: 10px 0;
+    padding: 0 12px;
+    border: 1px solid var(--ds-line);
+    border-radius: var(--ds-radius-sm);
+    background: #f8faf8;
+}
+
+.op-app .op-help > summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    color: var(--ds-muted);
+    font-size: 12px;
+    font-weight: 550;
+    cursor: pointer;
+}
+
+.op-app .op-help[open] > summary {
+    color: var(--ds-ink);
+}
+
+.op-app .op-report-tabs {
+    gap: 2px;
+    padding: 4px;
+    border-radius: 14px;
+    background: #eef2ef;
+}
+
+.op-app .op-report-tabs > button {
+    min-height: 40px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ds-muted);
+    font-size: 12px;
+    font-weight: 550;
+    box-shadow: none;
+}
+
+.op-app .op-report-tabs > button.active {
+    background: #fff;
+    color: var(--ds-ink);
+    box-shadow: 0 1px 5px #18241e14;
+}
+
+.op-app .op-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 14px;
+    background: #edf8f2;
+    color: #1f5e45;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.op-app .op-alert.error {
+    background: #fdf3f1;
+    color: #8f3b33;
+}
+
+.op-app .op-missing {
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #fff8ea;
+    color: var(--ds-warning);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.op-app .op-badge {
+    border-radius: 999px;
+    font-size: 10px;
+    padding: 5px 8px;
+}
+
+.op-app .op-request-footer > button:not(.secondary):not(.ghost) {
+    min-height: 46px;
+    border: 0 !important;
+    border-radius: 13px;
+    background: var(--ds-dark) !important;
+    color: #fff !important;
+    font-weight: 650;
+}
+
+.op-app .op-choice-row button.selected,
+.op-app .op-reason-chips button.selected {
+    background: var(--ds-blue-soft) !important;
+    color: var(--ds-blue) !important;
+    border-color: #b9ccff !important;
+}
+
+.op-app .op-request-steps button.active b {
+    background: var(--ds-dark);
+    color: #fff;
+}
+
+.op-app .op-request-steps button.done b {
+    background: var(--ds-accent);
+    color: #fff;
+}
+
+.op-app .op-request-card {
+    border: 1px solid var(--ds-line);
+    border-radius: 16px;
+    padding: 16px;
+    background: #fff;
+}
+
+.op-app .op-request-card h3 {
+    font-size: 15px;
+}
+
+.op-app .op-request-card p {
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.op-app .op-request-decision {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--ds-line);
+}
+
+.op-app .op-table-wrap {
+    border: 1px solid var(--ds-line);
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.op-app .op-table-wrap th {
+    padding: 10px 12px;
+    background: #f7f9f7;
+    color: var(--ds-muted);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.op-app .op-table-wrap td {
+    padding: 12px;
+    border-top: 1px solid var(--ds-line);
+    font-size: 13px;
+    color: var(--ds-ink);
+}
+
+.op-app .op-check {
+    min-height: 44px;
+    align-items: center;
+    gap: 9px;
+    font-size: 12px;
+    color: var(--ds-ink);
+}
+
+.op-app .op-check input {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.op-app .op-submit-row {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--ds-line);
+}
+
+.op-app .op-submit-row .op-actions {
+    gap: 8px;
+}
+
+.op-app .op-muted,
+.op-app .op-field-hint {
+    color: #5b6a61;
+    font-size: 12px;
+}
+
+.op-app .op-field > span {
+    color: #4d5d53;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.op-app .op-eyebrow {
+    font-size: 10.5px;
+    color: #62736a;
+}
+
+.op-app .op-sidebar nav button[data-section] > span:first-child {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: 9px;
+    background: var(--nav-soft, #f1f3f5);
+    color: var(--nav-color, #64756a);
+    font-size: 17px;
+}
+
+.op-app .op-sidebar nav button[data-section="overview"] { --nav-color: #0f7a55; --nav-soft: #e9f5ee; }
+.op-app .op-sidebar nav button[data-section="approvals"] { --nav-color: #2f6fed; --nav-soft: #eaf1ff; }
+.op-app .op-sidebar nav button[data-section="materials"] { --nav-color: #d9822b; --nav-soft: #fff3e3; }
+.op-app .op-sidebar nav button[data-section="catalog"] { --nav-color: #8b5cf6; --nav-soft: #f3edff; }
+.op-app .op-sidebar nav button[data-section="shops"] { --nav-color: #c2416b; --nav-soft: #fff0f3; }
+.op-app .op-sidebar nav button[data-section="suppliers"] { --nav-color: #a96535; --nav-soft: #fdf1e7; }
+.op-app .op-sidebar nav button[data-section="recipes"] { --nav-color: #5560c8; --nav-soft: #eef0ff; }
+.op-app .op-sidebar nav button[data-section="production"] { --nav-color: #0f8b78; --nav-soft: #e7f7f4; }
+.op-app .op-sidebar nav button[data-section="orders"] { --nav-color: #2f6fed; --nav-soft: #eaf1ff; }
+.op-app .op-sidebar nav button[data-section="returns"] { --nav-color: #b64b72; --nav-soft: #fdeef3; }
+.op-app .op-sidebar nav button[data-section="expenses"] { --nav-color: #d9822b; --nav-soft: #fff3e3; }
+.op-app .op-sidebar nav button[data-section="directory"] { --nav-color: #5f6b76; --nav-soft: #eef1f4; }
+.op-app .op-sidebar nav button[data-section="money"] { --nav-color: #0f7a55; --nav-soft: #e9f5ee; }
+.op-app .op-sidebar nav button[data-section="inventory"] { --nav-color: #0f7f74; --nav-soft: #e8f7f5; }
+.op-app .op-sidebar nav button[data-section="payroll"] { --nav-color: #0f7a55; --nav-soft: #e9f5ee; }
+.op-app .op-sidebar nav button[data-section="finance"] { --nav-color: #2f6fed; --nav-soft: #eaf1ff; }
+.op-app .op-sidebar nav button[data-section="history"] { --nav-color: #6b7180; --nav-soft: #f0f1f4; }
+.op-app .op-sidebar nav button[data-section="users"] { --nav-color: #6b7180; --nav-soft: #f0f1f4; }
+
+@media (min-width: 701px) {
+    .op-app .op-sidebar nav button.active {
+        background: #eef2f7;
+        color: var(--ds-dark);
+        box-shadow: inset 3px 0 var(--nav-color, var(--ds-blue));
+    }
+}
+
+.op-app .op-home-metrics .op-home-metric {
+    border: 1px solid var(--metric-line, var(--ds-line));
+    background: var(--metric-bg, #fff);
+    box-shadow: inset 0 3px 0 var(--metric-color, var(--ds-blue));
+}
+
+.op-app .op-home-metrics .op-home-metric:nth-child(1) { --metric-color: #2f6fed; --metric-bg: #f5f8ff; --metric-line: #dce7ff; }
+.op-app .op-home-metrics .op-home-metric:nth-child(2) { --metric-color: #d9822b; --metric-bg: #fffaf3; --metric-line: #f6e3c8; }
+.op-app .op-home-metrics .op-home-metric:nth-child(3) { --metric-color: #0f7a55; --metric-bg: #f4fbf7; --metric-line: #d6ede2; }
+.op-app .op-home-metrics .op-home-metric:nth-child(4) { --metric-color: #8b5cf6; --metric-bg: #faf7ff; --metric-line: #e7ddff; }
+
+.op-app .op-home-metric .studio-metric-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #43524a;
+}
+
+.op-app .op-home-metric .studio-metric-label svg {
+    color: var(--metric-color, var(--ds-blue));
+}
+
+.op-app .op-home-metric strong {
+    font-size: 27px;
+    color: var(--ds-ink);
+}
+
+.op-app .op-home-metric small {
+    color: var(--metric-color, var(--ds-blue)) !important;
+    font-weight: 600;
+}
+
+.op-app .cond-quick-actions button:nth-child(1) {
+    background: #f4fbf7 !important;
+    border: 1px solid #d6ede2 !important;
+}
+
+.op-app .cond-quick-actions button:nth-child(2) {
+    background: #f5f8ff !important;
+    border: 1px solid #dce7ff !important;
+}
+
+.op-app .cond-quick-actions button:nth-child(3) {
+    background: #fffaf3 !important;
+    border: 1px solid #f6e3c8 !important;
+}
+
+.op-app .cond-quick-actions button:nth-child(4) {
+    background: #faf7ff !important;
+    border: 1px solid #e7ddff !important;
+}
+
+.op-app .cond-secondary-links button > svg {
+    color: #0f7a55;
+}
+
+.op-app .cond-secondary-links button:nth-child(2) > svg {
+    color: var(--ds-blue);
+}
+
+.op-app .cond-secondary-links button:nth-child(3) > svg {
+    color: var(--ds-purple);
+}
+
+.op-app .op-badge {
+    font-size: 11px;
+    font-weight: 650;
+    padding: 5px 9px;
+}
+
+.op-app .op-badge.approved {
+    background: var(--ds-blue-soft);
+    color: var(--ds-blue);
+}
+
+.op-app .op-badge.shipped {
+    background: #e7f7f4;
+    color: #0f7f74;
+}
+
+.op-app .op-badge.ready {
+    background: var(--ds-purple-soft);
+    color: var(--ds-purple);
+}
+
+.op-app .op-badge.cancelled {
+    background: #fff0ee;
+    color: var(--ds-danger);
+}
+
+@media (max-width: 700px) {
+    .op-app .op-card {
+        border-radius: 18px;
+        padding: 16px;
+    }
+
+    .op-app .op-section-heading h2 {
+        font-size: 18px;
+    }
+
+    .op-app .op-form-grid {
+        grid-template-columns: 1fr !important;
+        gap: 8px;
+    }
+
+    .op-app .op-field > input,
+    .op-app .op-field > select,
+    .op-app .op-field > textarea {
+        min-height: 50px;
+        font-size: 16px;
+        border-radius: 13px;
+    }
+
+    .op-app .op-card form .op-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .op-app .op-card form .op-actions > button,
+    .op-app .op-wide-action {
+        width: 100%;
+        min-height: 50px;
+        font-size: 14px;
+    }
+
+    .op-app .op-submit-row {
+        position: sticky;
+        bottom: 72px;
+        z-index: 5;
+        margin: 14px -4px 0;
+        padding: 10px;
+        border: 1px solid var(--ds-line);
+        border-radius: 16px;
+        background: #ffffffee;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+    }
+
+    .op-app .op-help > summary {
+        min-height: 46px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .op-app *,
+    .op-app *::before,
+    .op-app *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}
