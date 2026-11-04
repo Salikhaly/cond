@@ -50,3 +50,187 @@
 .op-timesheet-empty td {
     color: #9aa6b5;
 }
+
+.op-timesheet-summary {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.op-timesheet-summary > div {
+    background: #f7f9fc;
+    border: 1px solid #e5ebf3;
+    border-radius: 12px;
+    padding: 10px;
+    display: grid;
+    gap: 3px;
+}
+
+.op-timesheet-summary span {
+    font-size: 10px;
+    color: #6b788a;
+}
+
+.op-timesheet-summary b {
+    font-size: 17px;
+    color: #17263b;
+}
+
+.op-timesheet-summary .bad b {
+    color: #b52c2c;
+}
+
+.op-timesheet-calendar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 5px;
+    margin-top: 8px;
+}
+
+.op-timesheet-weekday {
+    text-align: center;
+    font-size: 10px;
+    color: #7c899a;
+    padding: 2px 0 4px;
+}
+
+.op-timesheet-day {
+    position: relative;
+    min-height: 58px;
+    border: 1px solid #e2e9f2;
+    border-radius: 11px;
+    background: #fff;
+    padding: 6px;
+    text-align: left;
+    color: #26364b;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.op-timesheet-day:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(28, 47, 70, .1);
+}
+
+.op-timesheet-day.empty {
+    border: 0;
+    background: transparent;
+    cursor: default;
+    min-height: 0;
+}
+
+.op-timesheet-day.unmarked {
+    background: #fbfcfe;
+}
+
+.op-timesheet-day.worked {
+    background: #edf9f0;
+    border-color: #ccead5;
+}
+
+.op-timesheet-day.off {
+    background: #f4f6f9;
+    border-color: #e0e6ef;
+}
+
+.op-timesheet-day.vacation {
+    background: #edf3ff;
+    border-color: #d5e2fa;
+}
+
+.op-timesheet-day.sick {
+    background: #fff4e9;
+    border-color: #f4dfc7;
+}
+
+.op-timesheet-day.absent {
+    background: #fff0f0;
+    border-color: #f3d2d2;
+}
+
+.op-timesheet-day.reported {
+    background: #fff9e9;
+    border-color: #f1e4b8;
+}
+
+.op-timesheet-number {
+    font-size: 11px;
+    color: #5d6b7d;
+}
+
+.op-timesheet-letter {
+    position: absolute;
+    right: 7px;
+    top: 7px;
+    font-size: 12px;
+}
+
+.op-timesheet-day small {
+    position: absolute;
+    left: 7px;
+    bottom: 6px;
+    font-size: 10px;
+    color: #5d6b7d;
+}
+
+.op-timesheet-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 12px 0 4px;
+    font-size: 10px;
+    color: #627084;
+}
+
+.op-timesheet-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    background: #dfe6ef;
+}
+
+.op-timesheet-dot.worked { background: #35a865; }
+.op-timesheet-dot.off { background: #9ba8b8; }
+.op-timesheet-dot.vacation { background: #477fd5; }
+.op-timesheet-dot.sick { background: #d98935; }
+.op-timesheet-dot.absent { background: #d34a4a; }
+.op-timesheet-dot.reported { background: #c9a227; }
+
+.op-timesheet-comments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: #5e6c7e;
+}
+
+.op-timesheet-comments span {
+    background: #f6f8fb;
+    border-radius: 8px;
+    padding: 4px 8px;
+}
+
+@media (max-width: 620px) {
+    .op-timesheet-summary {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .op-timesheet-day {
+        min-height: 48px;
+        padding: 4px;
+    }
+
+    .op-timesheet-letter {
+        right: 4px;
+        top: 4px;
+    }
+
+    .op-timesheet-day small {
+        left: 4px;
+        bottom: 4px;
+    }
+}
