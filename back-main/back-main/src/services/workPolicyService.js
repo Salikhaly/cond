@@ -4,7 +4,7 @@ function amount(v,label){const n=Number(v??0);if(!['string','number'].includes(t
 async function validate(userId,b,t){
  const target=await User.findByPk(userId,{transaction:t});if(!target||!['employee','representative'].includes(target.role))throw ApiError.badRequest('Выберите работника или представителя');
  const startsOn=D.date(b.startsOn);if(!['piece','shift','sales','margin','custom','monthly'].includes(b.mode))throw ApiError.badRequest('Выберите способ начисления');
- if(b.mode==='monthly'&&(target.role!=='representative'||!startsOn.endsWith('-01')))throw ApiError.badRequest('Месячный расчёт представителя начинается с первого числа месяца');
+ if(b.mode==='monthly'&&!startsOn.endsWith('-01'))throw ApiError.badRequest('Месячный оклад начинается с первого числа месяца');
  if(target.role==='representative'&&b.mode==='piece')throw ApiError.badRequest('Сдельная выработка применяется к работнику производства');
  const percent=amount(b.percent,'процент'),shiftRate=amount(b.shiftRate,'ставку смены'),fixedDay=amount(b.fixedDay,'фиксированную часть дня'),monthlySalary=amount(b.monthlySalary,'оклад');if(percent>100)throw ApiError.badRequest('Процент не больше 100');
  const pieceRates=b.pieceRates||[];if(!Array.isArray(pieceRates)||pieceRates.length>100||new Set(pieceRates.map(r=>Number(r.productId))).size!==pieceRates.length)throw ApiError.badRequest('Проверьте ставки по товарам');

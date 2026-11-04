@@ -78,7 +78,7 @@ router.get('/expense-articles',wrap(req=>require('../services/expenseArticleServ
 router.post('/expense-articles',wrap(req=>require('../services/expenseArticleService').save(req.user,null,req.body)));
 router.patch('/expense-articles/:id',wrap(req=>require('../services/expenseArticleService').save(req.user,req.params.id,req.body)));
 router.get('/native-import',wrap(async req=>{await require('../services/authorityService').owner(req.user);const row=await require('../models/sync').State.findByPk(require('../services/workbookNativeImport').marker);return row?.value||null;}));
-router.get('/history-workbooks',wrap(req=>require('../services/historyWorkbookService').read(req.user,req.query)));
+
 router.get('/money',wrap(req=>require('../services/moneyService').read(req.user)));
 router.post('/money-accounts',wrap(req=>require('../services/moneyService').saveAccount(req.user,null,req.body)));
 router.patch('/money-accounts/:id',wrap(req=>require('../services/moneyService').saveAccount(req.user,req.params.id,req.body)));

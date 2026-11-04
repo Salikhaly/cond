@@ -4,7 +4,6 @@ require('./models/models');require('./models/operations');require('./models/sync
 const {State}=require('./models/sync');
 const app=require('./app');
 let ready;
-const historySource=require('./database/historyFebruary2025.js'),historyKey='history:'+historySource.id;
 function validate(){
  if(process.env.PUBLIC_DEMO!=='true'||process.env.LOCAL_DEMO!=='true')throw Error('Public demo deployment requires explicit demo flags');
  if(!process.env.SECRET_KEY||process.env.SECRET_KEY.length<48)throw Error('A separate signing key is required');
