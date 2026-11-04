@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
+import {restoreDraft} from './draftDefaults';
 
 // Origin and user isolate drafts between databases and accounts.
 export default function useDraft(name, initial) {
     const key = 'cond.draft.v1:' + localStorage.getItem('cond-owner') + ':' + name;
     const [value, setValue] = useState(() => {
-        try { return JSON.parse(localStorage.getItem(key)) ?? initial; }
+        try { return restoreDraft(name,JSON.parse(localStorage.getItem(key)),initial); }
         catch { return initial; }
     });
     const [stored, setStored] = useState(true);

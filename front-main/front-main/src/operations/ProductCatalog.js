@@ -7,7 +7,7 @@ import ProductPhoto from './ProductPhoto';
 import { RecipeEditor } from './Recipes';
 import './packaging.css';
 
-function ProductEditor({ product, onBack, onSaved, run }) {
+function ProductEditor({ product, onBack, onSaved, run, busy }) {
     const [form, setForm] = useState(product ? {
         name: product.name || '',
         weight: product.weight || '',
@@ -32,11 +32,11 @@ function ProductEditor({ product, onBack, onSaved, run }) {
             <Field label="Название" required maxLength={250} value={form.name} onChange={e => change('name', e.target.value)} />
             <Field label="Вместимость коробки, кг" type="number" min="0.01" step="0.01" required value={form.weight} onChange={e => change('weight', e.target.value)} />
             <Field label="Цена за 1 кг, ₸" type="number" min="0" step="0.01" value={form.pricePerKg} onChange={e => change('pricePerKg', e.target.value)} />
-            <Field label="Плёнка на 1 коробку, метров" type="number" min="0" step="0.01" value={form.filmQtyM} onChange={e => change('filmQtyM', e.target.value)} />
+            <details className="op-help"><summary>Работа, плёнка и описание</summary><Field label="Плёнка на 1 коробку, метров" type="number" min="0" step="0.01" value={form.filmQtyM} onChange={e => change('filmQtyM', e.target.value)} />
             <Field label="Оплата работнику за кг, ₸" type="number" min="0" step="0.01" value={form.priceForEmployee} onChange={e => change('priceForEmployee', e.target.value)} />
             <Field label="Описание покупателю"><textarea maxLength={1500} value={form.description} onChange={e => change('description', e.target.value)} /></Field>
-            <p className="op-field-hint">Цена за кг — своя у каждого товара. Из неё автоматически считаются цены коробок 2,5 / 2 / 1,1 / 1,5 кг. Изменить можно в «Упаковка → Коробки товаров».</p>
-            <button disabled={!form.name || !form.weight}>Сохранить</button>
+            <p className="op-field-hint">Цена за кг — своя у каждого товара. Из неё автоматически считаются цены коробок 2,5 / 2 / 1,1 / 1,5 кг. Изменить можно в «Упаковка → Коробки товаров».</p></details>
+            <button disabled={busy || !form.name || !form.weight}>Сохранить</button>
         </form>
     </section>;
 }
@@ -47,22 +47,24 @@ export default function ProductCatalog({ data, run, busy, initialAction, onProdu
     const [packaging, setPackaging] = useState(false);
     const [search, setSearch] = useState('');
     const [archived, setArchived] = useState(false);
+    const [limit,setLimit]=useState(12);
+    useEffect(()=>setLimit(12),[search,archived]);
     useEffect(()=>{if(initialAction?.kind==='add')setEditing({});},[initialAction]);
     if (packaging) return <><button className="ghost" onClick={() => setPackaging(false)}>← К товарам</button><Packaging data={data} run={run} busy={busy} /></>;
     const recipeProduct = (data.products || []).find(p => Number(p.id) === Number(recipeId));
     if (recipeProduct) return <RecipeEditor product={recipeProduct} data={data} run={run} busy={busy} onClose={() => setRecipeId(null)} />;
-    if (editing !== null) return <ProductEditor product={editing.id ? editing : null} run={run} onBack={() => setEditing(null)} onSaved={() => setEditing(null)} />;
+    if (editing !== null) return <ProductEditor product={editing.id ? editing : null} run={run} busy={busy} onBack={() => setEditing(null)} onSaved={() => setEditing(null)} />;
     const rows = (archived ? data.archivedProducts || [] : data.products || []).filter(product => product.name.toLowerCase().includes(search.trim().toLowerCase()));
     return <>
-        <section className="op-card op-module-heading"><div className="op-section-heading"><h2>Готовые товары</h2><div className="op-actions"><button className="secondary" onClick={() => setPackaging(true)}><Icon name="box" size={18} />Упаковка</button><button className="secondary" onClick={() => run(() => api('/products/packs/ensure-all', {}, 'POST'), 'Всем товарам добавлены коробки 2,5 / 2 / 1,1 / 1,5 кг')}>4 коробки всем</button><button onClick={() => setEditing({})}>+ Товар</button></div></div><Field label="Найти товар" type="search" value={search} placeholder="Название" onChange={e => setSearch(e.target.value)} /><button className="ghost" onClick={() => setArchived(v => !v)}>{archived ? '← Действующие товары' : 'Архив товаров'}</button></section>
-        <div className="op-master-list">{rows.map(product => {
+        <section className="op-card op-module-heading"><div className="op-section-heading"><h2>Готовые товары</h2><button onClick={()=>setEditing({})}>+ Товар</button></div><Field label="Найти товар" type="search" value={search} placeholder="Название" onChange={e=>setSearch(e.target.value)}/><details className="op-help ux-catalog-settings"><summary>Архив и упаковка</summary><div className="op-actions"><button className="secondary" onClick={()=>setPackaging(true)}>Упаковка</button><button className="secondary" disabled={busy} onClick={()=>run(()=>api('/products/packs/ensure-all',{},'POST'),'Стандартные коробки добавлены')}>Добавить стандартные коробки всем</button><button className="ghost" onClick={()=>setArchived(v=>!v)}>{archived?'Действующие товары':'Архив товаров'}</button></div></details></section>
+        <div className="op-master-list">{rows.slice(0,limit).map(product => {
             const packs = product.packs || [];
             return <article className="op-product-list-card suite-product" key={product.id}><div className="op-product-list-title">{!archived && <div className="op-product-thumb"><ProductPhoto product={product} /></div>}<div><h3>{product.name}</h3><p className="op-muted">{packs.length ? packs.map(pack => fmt(pack.capacityKg) + ' кг').join(' · ') : 'Коробка ' + fmt(product.weight) + ' кг'}</p><span className={'suite-stock-pill ' + (Number(product.availableKg) > 0 ? 'available' : 'waiting')}>{Number(product.availableKg) > 0 ? 'Свободно ' + fmt(product.availableKg) + ' кг' : 'Под производство'}</span></div></div>
                 {archived ? <button className="secondary" disabled={busy} onClick={() => run(async () => { await api('/products/' + product.id, { active: true }, 'PATCH'); setArchived(false); }, 'Товар восстановлен')}>Восстановить</button> : <>
-                    <div className="op-pack-list">{packs.length ? <><div className="op-pack-price-kg">Цена за кг: <b>{packs[0].salePrice != null && Number(packs[0].capacityKg)>0 ? moneyFmt(Number(packs[0].salePrice)/Number(packs[0].capacityKg)) : '—'} ₸</b></div><div className="op-pack-table"><div className="op-pack-table-head"><span>Коробка</span><span>Цена</span><span>Себестоимость</span><span>Остаток</span></div>{packs.map(pack => <div key={pack.id} className="op-pack-table-row"><span>{fmt(pack.capacityKg)} кг<small>плёнка {fmt(pack.filmQtyM)} м</small></span><span>{pack.salePrice == null ? '—' : moneyFmt(pack.salePrice) + ' ₸'}</span><span>{moneyFmt(pack.costPerBox)} ₸</span><span>{fmt(pack.availableBoxes)} шт</span></div>)}</div></> : <p className="op-missing">Добавьте тип коробки в разделе «Упаковка».</p>}</div>
-                    <div className="op-product-actions"><button className="secondary" onClick={() => setEditing(product)}>Изменить</button><button className="secondary" onClick={() => run(async () => { await api('/products/' + product.id + '/packs/ensure', {}, 'POST'); }, 'Добавлены коробки 2,5 / 2 / 1,1 / 1,5 кг')}>+ 4 коробки</button><button className="secondary" onClick={() => setPackaging(true)}>+ Коробка</button><button className={packs.length ? 'secondary' : ''} onClick={() => setRecipeId(product.id)}>Состав</button>{onProduce && packs[0] && <button className="secondary" onClick={() => onProduce(product.id)}>Выпуск</button>}</div>
+                    <div className="ux-product-price"><span>Цена за кг</span><strong>{product.salePrice==null?'Не указана':moneyFmt(product.salePrice)+' ₸'}</strong></div><details className="op-help ux-pack-details"><summary>Коробки и остатки · {packs.length}</summary><div className="op-pack-list">{packs.length ? <><div className="op-pack-price-kg">Цена за кг: <b>{packs[0].salePrice != null && Number(packs[0].capacityKg)>0 ? moneyFmt(Number(packs[0].salePrice)/Number(packs[0].capacityKg)) : '—'} ₸</b></div><div className="op-pack-table"><div className="op-pack-table-head"><span>Коробка</span><span>Цена</span><span>Себестоимость</span><span>Остаток</span></div>{packs.map(pack => <div key={pack.id} className="op-pack-table-row"><span>{fmt(pack.capacityKg)} кг<small>плёнка {fmt(pack.filmQtyM)} м</small></span><span data-label="Цена">{pack.salePrice == null ? '—' : moneyFmt(pack.salePrice) + ' ₸'}</span><span data-label="Себестоимость">{moneyFmt(pack.costPerBox)} ₸</span><span data-label="Остаток">{fmt(pack.availableBoxes)} шт</span></div>)}</div></> : <p className="op-missing">Добавьте тип коробки в разделе «Упаковка».</p>}</div><div className="op-actions"><button className="secondary" onClick={() => run(async () => { await api('/products/' + product.id + '/packs/ensure', {}, 'POST'); }, 'Добавлены коробки 2,5 / 2 / 1,1 / 1,5 кг')}>+ 4 коробки</button><button className="secondary" onClick={() => setPackaging(true)}>+ Коробка</button></div></details>
+                    <div className="op-product-actions"><button className="secondary" onClick={() => setEditing(product)}>Изменить</button><button className={packs.length ? 'secondary' : ''} onClick={() => setRecipeId(product.id)}>Состав</button>{onProduce && packs[0] && <button className="secondary" onClick={() => onProduce(product.id)}>Выпуск</button>}</div>
                 </>}
             </article>;
-        })}</div>{!rows.length && <Empty>{archived ? 'Архив пуст.' : 'Товаров пока нет.'}</Empty>}
+        })}</div>{rows.length>limit&&<button className="secondary op-wide-action" onClick={()=>setLimit(n=>n+12)}>Показать ещё · {rows.length-limit}</button>}{!rows.length && <Empty>{archived ? 'Архив пуст.' : 'Товаров пока нет.'}</Empty>}
     </>;
 }
