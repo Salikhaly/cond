@@ -19,6 +19,7 @@ import Customers from './Customers';
 import ProductCatalog from './ProductCatalog';
 import './workspace.css';
 import './mobile-dock.css';
+import './compact-forms.css';
 import ExportActions from './ExportActions';
 import Expenses from './Expenses';
 import StockCounts from './StockCounts';

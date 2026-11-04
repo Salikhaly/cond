@@ -1,0 +1,134 @@
+@media (max-width: 780px) {
+    .op-content {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    .op-card {
+        padding: 12px !important;
+        margin-bottom: 10px !important;
+        border-radius: 14px;
+    }
+
+    .op-simple-editor h2,
+    .op-quick-expense h2 {
+        font-size: 18px;
+        margin: 6px 0 10px;
+    }
+
+    .op-simple-editor .op-form-grid,
+    .op-quick-expense .op-form-grid {
+        gap: 6px !important;
+    }
+
+    .op-field {
+        margin: 6px 0 !important;
+    }
+
+    .op-field label {
+        font-size: 11px !important;
+        margin-bottom: 4px !important;
+    }
+
+    .op-field input,
+    .op-field select,
+    .op-field textarea {
+        min-height: 42px !important;
+        padding: 8px 10px !important;
+        font-size: 14px !important;
+    }
+
+    .op-receipt-item {
+        padding: 10px !important;
+        margin: 8px 0 !important;
+        border-radius: 10px !important;
+    }
+
+    .op-receipt-item .op-form-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+    }
+
+    .op-receipt-item .op-section-heading h3 {
+        font-size: 14px !important;
+    }
+
+    .op-receipt-item .op-help summary {
+        padding: 8px 0 !important;
+        font-size: 11px !important;
+    }
+
+    .op-receipt-item .op-muted,
+    .op-receipt-item .op-field-hint {
+        font-size: 11px !important;
+        line-height: 1.45 !important;
+    }
+
+    .op-receipt-item-total {
+        margin: 3px 0 !important;
+        font-size: 12px !important;
+    }
+
+    .op-receipt-item details {
+        margin: 5px 0 !important;
+    }
+
+    .cond-receipt-submit {
+        position: sticky;
+        bottom: calc(140px + env(safe-area-inset-bottom));
+        z-index: 9;
+        box-shadow: 0 7px 20px rgba(25, 55, 40, .18);
+    }
+
+    .cond-expenses-home {
+        padding: 12px !important;
+    }
+
+    .cond-expenses-total {
+        font-size: 27px !important;
+    }
+
+    .cond-expense-actions {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+        margin: 8px 0 !important;
+    }
+
+    .cond-expense-actions button {
+        min-height: 42px !important;
+        padding: 8px !important;
+        font-size: 12px !important;
+    }
+
+    .cond-expense-period {
+        margin: 8px 0 !important;
+    }
+
+    .cond-expense-list .cond-expense-row {
+        padding: 9px 8px !important;
+        gap: 8px !important;
+    }
+
+    .cond-expense-row b {
+        font-size: 13px !important;
+    }
+
+    .cond-expense-row small {
+        font-size: 10px !important;
+    }
+
+    .op-quick-expense {
+        padding: 14px !important;
+    }
+
+    .op-quick-expense input.op-amount-input {
+        font-size: 30px !important;
+        min-height: 62px !important;
+        padding: 10px 12px !important;
+    }
+
+    .op-quick-expense .op-wide-action {
+        bottom: calc(140px + env(safe-area-inset-bottom)) !important;
+    }
+}
