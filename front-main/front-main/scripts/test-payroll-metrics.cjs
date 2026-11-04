@@ -15,3 +15,12 @@ const fixed={workers:[{id:1}],payroll:[],workPolicies:[{userId:1,startsOn:'2026-
 check(payrollMetrics(fixed,1,'2026-11').accrued===0,'Agreed fixed salary is not fabricated as a recognized accrual');
 check(payrollMetrics({...fixed,payroll:[{userId:1,date:'2026-11-01',total_amount:180000,advanced_amount:50000}]},1,'2026-11').due===130000,'Posted monthly salary counted once and advance deducted');
 check(payrollMetrics({...fixed,workPolicies:[...fixed.workPolicies,{userId:1,startsOn:'2026-12-01',mode:'piece'}]},1,'2026-12').monthlySalary===0,'A newer piece policy does not retain an obsolete fixed salary');
+
+const mixed={workers:[{id:1}],payroll:[{userId:1,date:'2026-11-01',total_amount:150150,advanced_amount:50000}],workPolicies:[{userId:1,startsOn:'2026-11-01',mode:'monthly_piece',monthlySalary:150000,boxRate:50}],productions:[{workerId:1,date:'2026-11-04',status:'posted',kg:7.5,laborCost:150}],repAccruals:[{userId:1,month:'2026-11',version:1,delta:150000,snapshot:{fixed:150000}}]};
+const combined=payrollMetrics(mixed,1,'2026-11');
+check(combined.fixedAccrued===150000&&combined.volumeAccrued===150&&combined.accrued===150150&&combined.due===100150,'Mixed payslip separates recognized fixed and volume without doubling ledger');
+const pendingFixed=payrollMetrics({...mixed,payroll:[{userId:1,date:'2026-11-01',total_amount:150,advanced_amount:0}],repAccruals:[]},1,'2026-11');
+check(pendingFixed.fixedAccrued===0&&pendingFixed.monthlySalary===150000&&pendingFixed.accrued===150,'Unposted mixed salary remains planned, not earned');
+const mixedCalendar=calendarMetrics(mixed,1,'2026-11');
+check(mixedCalendar.days[3].earned===150&&mixedCalendar.days[29].earned===150000&&!mixedCalendar.days[29].worked&&mixedCalendar.unallocated===0,'Mixed calendar keeps volume on act date and fixed on month-end without invented attendance');
+console.log(count+' total payroll checks passed');

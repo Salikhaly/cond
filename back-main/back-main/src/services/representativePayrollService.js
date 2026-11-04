@@ -14,10 +14,10 @@ async function calculation(b,t){
     if(!['shipments','payments','margin','profit'].includes(b.mode))throw ApiError.badRequest('Выберите базу процента');
     const fixed=amount(b.fixed,'оклад'),percent=amount(b.percent,'процент');
     if(percent>100)throw ApiError.badRequest('Процент должен быть от 0 до 100');
-    const rule=await require('./workPolicyService').at(user.id,new Date(bounds.end.getTime()+5*3600000-86400000).toISOString().slice(0,10),t);if(rule&&rule.mode!=='monthly')throw ApiError.badRequest('У сотрудника действует ежедневное правило. Месячный расчёт поверх него не начисляется');
-    if(user.role==='employee'&&(!rule||rule.mode!=='monthly'||percent!==0||fixed!==Number(rule.monthlySalary)))throw ApiError.badRequest('Оклад работника берётся из согласованных условий. Выберите месячный оклад, процент — 0');
-    if(user.role==='employee'&&await M.Production.count({where:{workerId:user.id,status:'posted',date:{[Op.gte]:b.month+'-01',[Op.lt]:new Date(bounds.end.getTime()+5*3600000).toISOString().slice(0,10)},laborCost:{[Op.ne]:0}},transaction:t}))throw ApiError.badRequest('В месяце уже есть сдельные начисления. Согласуйте переход с нового месяца');
-    if(rule?.mode==='monthly'&&fixed!==Number(rule.monthlySalary))throw ApiError.badRequest('Оклад отличается от согласованных условий. Сначала согласуйте изменение оклада');
+    const rule=await require('./workPolicyService').at(user.id,new Date(bounds.end.getTime()+5*3600000-86400000).toISOString().slice(0,10),t);if(rule&&!['monthly','monthly_piece'].includes(rule.mode))throw ApiError.badRequest('У сотрудника действует ежедневное правило. Месячный расчёт поверх него не начисляется');
+    if(user.role==='employee'&&(!rule||!['monthly','monthly_piece'].includes(rule.mode)||percent!==0||fixed!==Number(rule.monthlySalary)))throw ApiError.badRequest('Оклад работника берётся из согласованных условий. Выберите месячный оклад, процент — 0');
+    if(user.role==='employee'&&rule?.mode==='monthly'&&await M.Production.count({where:{workerId:user.id,status:'posted',date:{[Op.gte]:b.month+'-01',[Op.lt]:new Date(bounds.end.getTime()+5*3600000).toISOString().slice(0,10)},laborCost:{[Op.ne]:0}},transaction:t}))throw ApiError.badRequest('В месяце уже есть сдельные начисления. Согласуйте переход с нового месяца');
+    if(['monthly','monthly_piece'].includes(rule?.mode)&&fixed!==Number(rule.monthlySalary))throw ApiError.badRequest('Оклад отличается от согласованных условий. Сначала согласуйте изменение оклада');
     const orders=await M.Order.findAll({where:{userId:user.id,status:'shipped'},transaction:t});
     const periodOrders=orders.filter(o=>monthOf(o.shippedAt)===b.month);
     const returns=await M.GoodsReturn.findAll({where:{status:'posted',orderId:orders.map(o=>o.id),postedAt:{[Op.gte]:bounds.start,[Op.lt]:bounds.end}},transaction:t});

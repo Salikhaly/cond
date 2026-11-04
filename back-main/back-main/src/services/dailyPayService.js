@@ -1,7 +1,7 @@
 const db=require('../database/sequelize'),M=require('../models/operations'),{User}=require('../models/models'),{Op}=require('sequelize'),{createHash}=require('crypto'),ApiError=require('../exceptions/ApiError'),D=require('./businessDay');
 const money=n=>Math.round((Number(n)+Number.EPSILON)*100)/100,hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 async function calculation(userId,date,t){
- const policy=await require('./workPolicyService').at(userId,date,t);if(!policy||['piece','custom','monthly'].includes(policy.mode))return null;
+ const policy=await require('./workPolicyService').at(userId,date,t);if(!policy||['piece','custom','monthly','monthly_piece'].includes(policy.mode))return null;
  const work=await M.WorkDay.findOne({where:{userId,date},transaction:t}),productions=await M.Production.findAll({where:{workerId:userId,date,status:'posted'},attributes:['id'],transaction:t}),person=await User.findByPk(userId,{attributes:['role'],transaction:t}),worked=productions.length>0||person?.role!=='employee'&&work?.status==='worked';
  if(policy.mode==='shift'){
   const source={policyId:policy.id,mode:'shift',worked,shiftRate:Number(policy.shiftRate)},sourceFingerprint=hash(source),daily=await M.DailyPay.findOne({where:{userId,date},transaction:t});

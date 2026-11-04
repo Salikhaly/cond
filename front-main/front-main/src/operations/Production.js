@@ -127,7 +127,7 @@ export default function Production({ data, user, run, busy, initialAction, onNav
                 </div>
                 {selectedPack && Number(form.boxes) > 0 && <p className="op-plan-context">{fmt(form.boxes)} {boxWord(form.boxes)} × {fmt(selectedPack.capacityKg)} кг = <b>{fmt(Number(form.boxes) * Number(selectedPack.capacityKg))} кг</b> сырья к списанию. На склад: <b>{fmt(form.boxes)} {boxWord(form.boxes)}</b>.</p>}
                 {late && <><p className="op-plan-context">Прошлую дату подтвердит администратор.</p><Field label="Причина" required maxLength={2000} value={form.reason || ''} onChange={e => change('reason', e.target.value)} /></>}
-                {!admin && selectedPack && <p className="op-muted">{selectedProduct?.wageMode === 'piece' ? 'Оплата за коробку: ' + moneyFmt(selectedPack.payPerBox || 0) + ' ₸' : 'Оплата по вашим условиям — в разделе «Моя зарплата»'}</p>}
+                {!admin && selectedPack && <p className="op-muted">{['piece','monthly_piece'].includes(selectedProduct?.wageMode) ? 'Оплата за коробку: ' + moneyFmt(selectedPack.payPerBox || 0) + ' ₸' : 'Оплата по вашим условиям — в разделе «Моя зарплата»'}</p>}
                 <button disabled={busy}>{late ? 'Отправить запрос' : 'Записать'}</button>
             </form>
         </section>}

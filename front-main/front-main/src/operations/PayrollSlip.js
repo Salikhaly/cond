@@ -19,7 +19,8 @@ export default function PayrollSlip({ data, person, month, onClose }) {
         <p><b>{person.name}</b>{person.role === 'representative' ? ' · торговый представитель' : ' · работник производства'}</p>
         <table className="op-slip-table"><tbody>
             <tr><td>Начислено за месяц</td><td>{moneyFmt(m.accrued)} ₸</td></tr>
-            {m.monthlySalary > 0 && <tr><td>В том числе оклад</td><td>{moneyFmt(m.monthlySalary)} ₸</td></tr>}
+            {m.fixedAccrued > 0 && <tr><td>В том числе оклад</td><td>{moneyFmt(m.fixedAccrued)} ₸</td></tr>}
+            {m.volumeAccrued>0&&<tr><td>В том числе выработка</td><td>{moneyFmt(m.volumeAccrued)} ₸</td></tr>}
             <tr><td>Премии</td><td>{moneyFmt(slip.premiums)} ₸</td></tr>
             <tr><td>Удержания</td><td>−{moneyFmt(slip.deductions)} ₸</td></tr>
             <tr><td>Авансы</td><td>{moneyFmt(m.advancePaid)} ₸</td></tr>

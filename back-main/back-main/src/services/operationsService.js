@@ -46,9 +46,9 @@ async function catalog(user) {
     return products.map(p => {
         const packKg=variants.find(v=>v.productId===p.id)?.kgPerPack??null;
         if (user.role === 'employee') {
-            const rate=personal?.pieceRates?.find(r=>r.productId===p.id),piece=!personal||personal.mode==='piece',pack=variants.find(v=>v.productId===p.id);
+            const rate=personal?.pieceRates?.find(r=>r.productId===p.id),piece=!personal||['piece','monthly_piece'].includes(personal.mode),pack=variants.find(v=>v.productId===p.id);
             const perKg=rate?Number(rate.rate)/(rate.unit==='pack'?Number(packKg):1):profile?.individualRate!=null?Number(profile.individualRate):pack?Number(pack.laborPerPack)/Number(pack.kgPerPack):Number(p.priceForEmployee);
-            return {id:p.id,name:p.name,weight:p.weight,packKg,packs:packView(p).map(x=>({...x,costPerBox:undefined,salePrice:undefined,payPerBox:piece?(personal?.boxRate?Number(personal.boxRate):round(perKg*x.capacityKg)):null})),wageMode:personal?.mode||'piece',payRateForKg:piece?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
+            return {id:p.id,name:p.name,weight:p.weight,packKg,packs:packView(p).map(x=>({...x,costPerBox:undefined,salePrice:undefined,payPerBox:piece?(!rate&&Number(personal?.boxRate)>0?Number(personal.boxRate):rate||profile?.individualRate!=null?round(perKg*x.capacityKg):Number(x.laborPerBox)):null})),wageMode:personal?.mode||'piece',payRateForKg:piece&&(!Number(personal?.boxRate)||rate)?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
         }
         const s = stocks.find(s => s.productId === p.id);
         const display=displays.find(d=>d.productId===p.id);
@@ -89,13 +89,15 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
     const variant=await M.PackagingVariant.findByPk(product.id,{transaction:tx});
     const policy=workerId?await require('./workPolicyService').at(workerId,workDate||require('./businessDay').today(),tx):null;
     const profile=workerId?await M.WorkProfile.findByPk(workerId,{transaction:tx}):null;
-    const piece=!policy||policy.mode==='piece';
+    const piece=!policy||['piece','monthly_piece'].includes(policy.mode);
     const personalRate=policy?.pieceRates?.find(r=>r.productId===product.id);
     const personalPerKg=personalRate?Number(personalRate.rate)/(personalRate.unit==='pack'?Number(variant?.kgPerPack||product.weight):1):null;
     const profileRate=profile?.individualRate!=null?Number(profile.individualRate):null;
     const effectiveRate=personalPerKg!=null?personalPerKg:profileRate!=null?profileRate:null;
-    const laborCost=pack&&piece?money(boxes*Number(pack.laborPerBox||0)):piece?money(effectiveRate!=null?totalKg*effectiveRate:variant?totalKg/Number(variant.kgPerPack)*Number(variant.laborPerPack):totalKg*Number(product.priceForEmployee)):0;
-    const reportedRate=effectiveRate!=null?effectiveRate:Number(product.priceForEmployee);
+    const boxRate=piece&&!personalRate&&Number(policy?.boxRate)>0?Number(policy.boxRate):null;
+    if(boxRate!=null&&!pack)throw ApiError.badRequest('Для оплаты за коробку выберите тип коробки и количество');
+    const laborCost=pack&&piece?money(boxRate!=null?boxes*boxRate:effectiveRate!=null?totalKg*effectiveRate:boxes*Number(pack.laborPerBox||0)):piece?money(effectiveRate!=null?totalKg*effectiveRate:variant?totalKg/Number(variant.kgPerPack)*Number(variant.laborPerPack):totalKg*Number(product.priceForEmployee)):0;
+    const reportedRate=piece&&pack?round(laborCost/totalKg):effectiveRate!=null?effectiveRate:Number(product.priceForEmployee);
     const overheadCost = pack ? money(boxes*Number(pack.overheadPerBox||0)) : round(Number(recipe.overhead) * totalKg / Number(recipe.outputKg));
     const totalCost = round(materialCost + packagingCost + laborCost + overheadCost);
     return { productId: product.id, productName: product.name, kg: totalKg, boxes, packId: pack?.id||null, capacityKg: pack?Number(pack.capacityKg):null, recipeVersion: recipe.version, workMode:policy?.mode||'piece',ratePerKg:piece?reportedRate:0, lines, packagingLines, materialCost, packagingCost, laborCost, overheadCost, totalCost, costPerKg: round(totalCost / totalKg), costPerBox: boxes?round(totalCost/boxes):null, enough: [...lines,...packagingLines].every(l => l.enough) };
@@ -462,8 +464,7 @@ module.exports = {
             await product.update({ weightTotal: stock.kg, quantity: Math.floor(Number(stock.kg) / capacity) }, { transaction: t });
             // Serialize payroll updates on the worker, including first salary creation.
             await User.findByPk(p.workerId, { transaction: t, lock: t.LOCK.UPDATE });
-            const start = new Date(p.date + 'T00:00:00Z'); start.setUTCDate(1);
-            const end = new Date(start); end.setUTCMonth(end.getUTCMonth() + 1);
+            const {start,end}=require('./payrollPeriod')(p.date.slice(0,7));
             let salary = await Salary.findOne({ where: { userId: p.workerId, is_active: true, date: { [Op.gte]: start, [Op.lt]: end } }, transaction: t, lock: t.LOCK.UPDATE });
             if (!salary) salary = await Salary.create({ userId: p.workerId, total_amount: 0, date: start }, { transaction: t });
             await salary.increment('total_amount', { by: calc.laborCost, transaction: t });

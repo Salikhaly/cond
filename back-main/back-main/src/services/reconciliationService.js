@@ -21,7 +21,7 @@ module.exports = async user => {
         }
         for (const m of materials) {
             const incoming = receipts.filter(r => r.materialId === m.id).reduce((s, r) => s + Number(r.quantity), 0);
-            const consumed = productions.filter(p => p.status === 'posted').reduce((s, p) => s + (p.snapshot?.lines || []).filter(l => l.materialId === m.id).reduce((n, l) => n + Number(l.quantity), 0), 0);
+            const consumed = productions.filter(p => p.status === 'posted').reduce((s, p) => s + [...(p.snapshot?.lines || []),...(p.snapshot?.packagingLines || [])].filter(l => l.materialId === m.id).reduce((n, l) => n + Number(l.quantity), 0), 0);
             const adjustments=stockCounts.filter(d=>d.status==='posted').reduce((s,d)=>s+d.lines.filter(l=>l.kind==='material'&&l.itemId===m.id).reduce((a,l)=>a+Number(l.delta),0),0);
             if (!close(incoming - consumed + adjustments, m.quantity)) issues.push(`Материал «${m.name}»: приход минус списание не равен остатку`);
         }

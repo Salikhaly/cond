@@ -14,17 +14,19 @@ function monthlySalaryFor(data, workerId, month) {
     const policy = (data.workPolicies || [])
         .filter(row => Number(row.userId) === Number(workerId) && row.startsOn <= month + '-31')
         .sort((a, b) => String(b.startsOn).localeCompare(String(a.startsOn)))[0];
-    return policy?.mode==='monthly' ? Number(policy.monthlySalary || 0) : 0;
+    return ['monthly','monthly_piece'].includes(policy?.mode) ? Number(policy.monthlySalary || 0) : 0;
 }
 function payrollMetrics(data, workerId, month) {
     const salaries=(data.payroll || []).filter(s=>(!workerId || s.userId===Number(workerId)) && (!month || monthOf(s.date)===month));
     const monthlySalary = monthlySalaryFor(data, workerId, month);
     const accrued=salaries.reduce((sum,s)=>sum+Number(s.total_amount),0),paid=salaries.reduce((sum,s)=>sum+Number(s.advanced_amount),0);
     const productions=(data.productions||[]).filter(p=>p.status==='posted'&&(!workerId||p.workerId===Number(workerId))&&(!month||monthOf(p.date)===month));
+    const fixedVersions=new Map();for(const a of data.repAccruals||[]){if(workerId&&Number(a.userId)!==Number(workerId)||month&&a.month!==month)continue;const key=a.userId+':'+a.month;if(!fixedVersions.has(key)||Number(a.version)>Number(fixedVersions.get(key).version))fixedVersions.set(key,a);}
+    const fixedAccrued=[...fixedVersions.values()].reduce((sum,a)=>sum+Number(a.snapshot?.fixed||0),0),volumeAccrued=productions.reduce((sum,p)=>sum+Number(p.laborCost||0),0);
     const paymentMonth=p=>p.salaryMonth||monthOf(p.date);
     const payments=(data.payments||[]).filter(p=>(!workerId||p.workerId===Number(workerId))&&(!month||paymentMonth(p)===month));
     const advancePaid=payments.filter(p=>p.kind==='advance').reduce((sum,p)=>sum+Number(p.amount),0);
     const salaryPaid=payments.filter(p=>p.kind!=='advance').reduce((sum,p)=>sum+Number(p.amount),0);
-    return {accrued,paid,advancePaid,salaryPaid,payments,advanceAhead:payrollTotals(salaries).advanceAhead,due:workerId?Math.round((accrued-paid)*100)/100:payrollTotals(salaries).salaryDue,monthlySalary,kg:productions.reduce((sum,p)=>sum+Number(p.kg),0),advances:(data.payrollAdvances || []).filter(a=>salaries.some(s=>s.id===a.salaryId)).map(a=>({...a,workerId:salaries.find(s=>s.id===a.salaryId).userId,salaryMonth:monthOf(salaries.find(s=>s.id===a.salaryId).date)}))};
+    return {accrued,paid,fixedAccrued,volumeAccrued,advancePaid,salaryPaid,payments,advanceAhead:payrollTotals(salaries).advanceAhead,due:workerId?Math.round((accrued-paid)*100)/100:payrollTotals(salaries).salaryDue,monthlySalary,kg:productions.reduce((sum,p)=>sum+Number(p.kg),0),advances:(data.payrollAdvances || []).filter(a=>salaries.some(s=>s.id===a.salaryId)).map(a=>({...a,workerId:salaries.find(s=>s.id===a.salaryId).userId,salaryMonth:monthOf(salaries.find(s=>s.id===a.salaryId).date)}))};
 }
 module.exports={monthOf,payrollMetrics,payrollTotals};

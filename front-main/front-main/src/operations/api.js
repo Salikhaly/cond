@@ -77,6 +77,7 @@ async function offlineCalculation(body) {
     if (!recipe || !product || !(kg > 0)) throw new Error('Для расчёта на телефоне сначала загрузите рецептуру с сервера');
     const policy=(d.workPolicies||[]).filter(p=>p.userId===Number(body.workerId)&&p.startsOn<=(body.date||today())).sort((a,b)=>b.startsOn.localeCompare(a.startsOn))[0];
     const rate=policy?.pieceRates?.find(r=>r.productId===product.id);
+    if(!rate&&Number(policy?.boxRate)>0)throw new Error('Ставка за коробку проверяется сервером. Выпуск можно сохранить на телефоне для отправки позже');
     const calc=calculationEstimate({recipe,materials:d.materials,packKg:product.packKg,laborPerPack:rate&&product.packKg?Number(rate.rate)*(rate.unit==='pack'?1:Number(product.packKg)):product.packLaborPerPack,ratePerKg:rate?Number(rate.rate)/(rate.unit==='pack'?Number(product.packKg):1):product.priceForEmployee,kg,workMode:policy?.mode||'piece'});
     if(calc.tooSmall)throw new Error('Слишком малый выпуск для точности учёта');
     return {...calc,productId:product.id,productName:product.name,_offline:true};

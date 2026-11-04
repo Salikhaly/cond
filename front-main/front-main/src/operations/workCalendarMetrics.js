@@ -1,6 +1,6 @@
 const {day}=require('./overviewMetrics'),{payrollMetrics}=require('./payrollMetrics');
 const money=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
-const policyLabels={piece:'По изготовленным кг',shift:'Фиксированная смена',sales:'Процент от продаж',margin:'Процент от маржи',custom:'Ручные согласованные начисления',monthly:'Месячный оклад и процент'};
+const policyLabels={piece:'По изготовленным кг',shift:'Фиксированная смена',sales:'Процент от продаж',margin:'Процент от маржи',custom:'Ручные согласованные начисления',monthly:'Месячный оклад и процент',monthly_piece:'Оклад + выработка'};
 function calendarMetrics(data,userId,month){
  userId=Number(userId);const isProduction=(data.workers||[]).some(w=>w.id===userId)||(data.payees||[]).some(w=>w.id===userId&&w.role==='employee');const [year,index]=month.split('-').map(Number),last=new Date(Date.UTC(year,index,0)).getUTCDate(),days=[];
  const policies=(data.workPolicies||[]).filter(p=>p.userId===userId).sort((a,b)=>b.startsOn.localeCompare(a.startsOn));
