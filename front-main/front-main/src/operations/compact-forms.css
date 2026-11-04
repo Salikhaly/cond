@@ -131,4 +131,37 @@
     .op-quick-expense .op-wide-action {
         bottom: calc(140px + env(safe-area-inset-bottom)) !important;
     }
+
+    .op-quick-expense .cond-article-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+        gap: 5px !important;
+        margin: 8px 0 12px !important;
+    }
+
+    .op-quick-expense .cond-article-grid button {
+        min-height: 70px !important;
+        padding: 6px 3px !important;
+        font-size: 10px !important;
+        line-height: 1.2 !important;
+        gap: 4px !important;
+        border-radius: 12px !important;
+    }
+
+    .op-quick-expense .cond-article-icon {
+        width: 29px !important;
+        height: 29px !important;
+        border-radius: 9px !important;
+    }
+
+    .op-quick-expense .cond-article-grid button > svg {
+        width: 13px !important;
+        height: 13px !important;
+        top: 5px !important;
+        right: 5px !important;
+    }
+
+    .op-quick-expense .studio-picker-heading {
+        margin-top: 10px !important;
+        margin-bottom: 2px !important;
+    }
 }

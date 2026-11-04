@@ -72,6 +72,10 @@ function MobileDock({tab,onSelect}) {
         payroll: [['Табель', () => onSelect('payroll', { kind: 'timesheet' })], ['Выплаты', () => onSelect('payroll', { kind: 'payments' })], ['Заявки', () => onSelect('orders')]],
         finance: [['Аналитика', () => onSelect('finance', { kind: 'analytics' })], ['Расходы', () => onSelect('expenses', { kind: 'add' })], ['Заявки', () => onSelect('orders')]],
         inventory: [['Приход', () => onSelect('materials', 'receipt')], ['Товары', () => onSelect('catalog')], ['Отчёты', () => onSelect('finance')]],
+        expenses: [['+ Расход', () => onSelect('expenses', { kind: 'add' })], ['Аванс', () => onSelect('expenses', { kind: 'advance' })], ['Отчёты', () => onSelect('finance')]],
+        directory: [['Расходы', () => onSelect('expenses')], ['Отчёты', () => onSelect('finance')], ['Обзор', () => onSelect('overview')]],
+        approvals: [['Обзор', () => onSelect('overview')], ['Заявки', () => onSelect('orders')], ['Зарплата', () => onSelect('payroll')]],
+        recipes: [['Товары', () => onSelect('catalog')], ['Производство', () => onSelect('production', 'add')], ['Отчёты', () => onSelect('finance')]],
         users: [['Обзор', () => onSelect('overview')], ['Зарплата', () => onSelect('payroll')], ['Отчёты', () => onSelect('finance')]],
     }[tab] || [['Обзор', () => onSelect('overview')], ['Заявки', () => onSelect('orders')], ['Отчёты', () => onSelect('finance')]];
     return <nav className="op-mobile-dock" aria-label="Быстрые действия">{actions.map(([label, action]) => <button key={label} type="button" onClick={action}>{label}</button>)}</nav>;
