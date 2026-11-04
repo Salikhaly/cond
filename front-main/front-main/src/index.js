@@ -11,10 +11,14 @@ console.log("process.env.API_URL:", process.env.API_URL_DEV);
 
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
-if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+        .then(registration => registration.update())
+        .catch(() => {});
+}
 
 root.render(
-    <BrowserRouter basename={window.location.pathname.startsWith('/legacy') ? '/legacy' : undefined}>
+    <BrowserRouter>
         <App />
     </BrowserRouter>
 );
