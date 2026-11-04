@@ -22,4 +22,9 @@ test('Conditional screens still import every referenced React component',()=>{
   traverse(tree,{JSXOpeningElement(p){const node=p.node.name,name=node.type==='JSXIdentifier'?node.name:node.type==='JSXMemberExpression'&&node.object.type==='JSXIdentifier'?node.object.name:null;if(name&&/^[A-Z]/.test(name))assert.ok(p.scope.hasBinding(name),file+': missing component '+name);}});
  }
 });
+const {attendanceLabel}=require('../src/operations/workCalendarMetrics');
+test('Unmarked and future days are not called employee absences',()=>{assert.equal(attendanceLabel({date:'2026-11-03'},today),'Нет отметки');assert.equal(attendanceLabel({date:'2026-11-05'},today),'День ещё не наступил');});
+test('A wage adjustment without output is not presented as confirmed attendance',()=>assert.equal(attendanceLabel({date:today,hasEarnings:true},today),'Есть начисление, выход не подтверждён'));
+test('Actual work and a pending act retain their distinct labels',()=>{assert.equal(attendanceLabel({date:today,worked:true},today),'Работа подтверждена');assert.equal(attendanceLabel({date:today,pending:true},today),'На проверке');});
+
 console.log(n+' UX navigation and draft checks passed');

@@ -1,6 +1,6 @@
 import React,{useMemo} from 'react';
-import {calendarMetrics} from './workCalendarMetrics';
-import {moneyFmt} from './api';
+import {calendarMetrics,attendanceLabel} from './workCalendarMetrics';
+import {moneyFmt,today} from './api';
 
 export default function WorkCalendar({data,person,month}){
     const m=useMemo(()=>calendarMetrics(data,person.id,month),[data,person.id,month]);
@@ -18,14 +18,14 @@ export default function WorkCalendar({data,person,month}){
         {overpaid>0&&<p className="op-plan-context">Начислено {moneyFmt(m.total)} ₸, выплачено {moneyFmt(taken)} ₸. Переплата уменьшит будущие начисления.</p>}
         {m.unallocated!==0&&<p className="op-plan-context">Прежние начисления {moneyFmt(m.unallocated)} ₸ без разбивки по дням.</p>}
         <div className="op-pay-graphic">
-            <div className="op-pay-graphic-head"><h3>Вышел / не вышел</h3><small>каждый столбик — день месяца</small></div>
+            <div className="op-pay-graphic-head"><h3>Рабочие дни</h3><small>по отметкам и документам</small></div>
             <div className="op-pay-graphic-grid" style={{gridTemplateColumns:'repeat('+m.days.length+', minmax(0, 1fr))'}}>
                 {m.days.map(day=>{
-                    const on=day.worked||day.earned>0;
-                    return <span key={day.date} className={'op-pay-graphic-day'+(on?' on':'')+(day.pending?' pending':'')} title={day.date+': '+(on?'вышел':'не вышел')+(day.pending?' · на проверке':'')} aria-label={day.date+': '+(on?'вышел':'не вышел')+(day.pending?' · на проверке':'')}/>;
+                    const on=day.worked,label=attendanceLabel(day,data.presentationDate||today());
+                    return <span key={day.date} className={'op-pay-graphic-day'+(on?' on':'')+(day.pending?' pending':'')} title={day.date+': '+label} aria-label={day.date+': '+label}/>;
                 })}
             </div>
-            <div className="op-pay-graphic-legend"><span><i className="green"/>Вышел</span><span><i className="amber"/>На проверке</span><span><i/>Не вышел</span></div>
+            <div className="op-pay-graphic-legend"><span><i className="green"/>Работал</span><span><i className="amber"/>На проверке</span><span><i/>Нет отметки</span></div>
         </div>
     </section>;
 }

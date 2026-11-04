@@ -18,4 +18,12 @@ function calendarMetrics(data,userId,month){
  const recorded=money(days.reduce((s,d)=>s+d.earned,0)),monthTotal=payrollMetrics(data,userId,month).accrued;
  return {days,recorded,monthly,unallocated:money(monthTotal-recorded),total:monthTotal,worked:days.filter(d=>d.worked).length,positive:days.filter(d=>d.earned>0).length,policies,offset:(new Date(Date.UTC(year,index-1,1)).getUTCDay()+6)%7};
 }
-module.exports={calendarMetrics,policyLabels};
+function attendanceLabel(day,anchor){
+ if(day.worked)return 'Работа подтверждена';
+ if(day.pending)return 'На проверке';
+ if(day.date>anchor)return 'День ещё не наступил';
+ if(day.off)return 'Нерабочий день';
+ if(day.hasEarnings)return 'Есть начисление, выход не подтверждён';
+ return 'Нет отметки';
+}
+module.exports={calendarMetrics,policyLabels,attendanceLabel};
