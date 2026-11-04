@@ -5,7 +5,7 @@ module.exports = async () => db.transaction(async t => {
     await db.query('SELECT pg_advisory_xact_lock(42810241)',{transaction:t});
     const M=require('../models/operations');
     await db.query('ALTER TABLE expense_meta ADD COLUMN IF NOT EXISTS \"costGroup\" VARCHAR(255)',{transaction:t});
-    await db.query('ALTER TABLE \"work_profiles\" ADD COLUMN IF NOT EXISTS photo TEXT, ADD COLUMN IF NOT EXISTS instagram VARCHAR(255), ADD COLUMN IF NOT EXISTS note TEXT, ADD COLUMN IF NOT EXISTS parents JSONB NOT NULL DEFAULT '{}'::jsonb',{transaction:t});
+    await db.query('ALTER TABLE \"work_profiles\" ADD COLUMN IF NOT EXISTS photo TEXT, ADD COLUMN IF NOT EXISTS instagram VARCHAR(255), ADD COLUMN IF NOT EXISTS note TEXT, ADD COLUMN IF NOT EXISTS parents JSONB NOT NULL DEFAULT \'{}\'::jsonb',{transaction:t});
     await db.query('ALTER TABLE "work_policies" ADD COLUMN IF NOT EXISTS "pieceRates" JSONB NOT NULL DEFAULT \'[]\'::jsonb',{transaction:t});
     await db.query('ALTER TABLE work_profiles ADD COLUMN IF NOT EXISTS tiktok VARCHAR(255)',{transaction:t});
     await db.query('ALTER TABLE work_profiles ADD COLUMN IF NOT EXISTS "individualRate" NUMERIC(16,4)',{transaction:t});
