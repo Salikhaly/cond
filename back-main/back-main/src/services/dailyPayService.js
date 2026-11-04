@@ -90,7 +90,9 @@ async function workDay(u,b){
 }
 async function visible(u,t){
  const where=u.role==='super_admin'?{}:{userId:u.id},workPolicies=await M.WorkPolicy.findAll({where,order:[['startsOn','DESC']],transaction:t}),workDays=await M.WorkDay.findAll({where,transaction:t}),raw=await M.DailyPay.findAll({where,transaction:t}),wageAdjustments=await M.WageAdjustment.findAll({where,transaction:t}),workProfiles=await M.WorkProfile.findAll({where,transaction:t});
- const dailyPay=raw.map(p=>{const row=p.toJSON();if(u.role!=='super_admin'&&row.snapshot){const {source,...safe}=row.snapshot;row.snapshot=safe;}return row;});return {workPolicies,workDays,dailyPay,wageAdjustments,workProfiles};
+ const dailyPay=raw.map(p=>{const row=p.toJSON();if(u.role!=='super_admin'&&row.snapshot){const {source,...safe}=row.snapshot;row.snapshot=safe;}return row;});
+ const safeProfiles=u.role==='super_admin'?workProfiles:workProfiles.map(profile=>{const row=profile.get({plain:true});const {parents,...safe}=row;return safe;});
+ return {workPolicies,workDays,dailyPay,wageAdjustments,workProfiles:safeProfiles};
 }
 async function profile(u,id,b){
  await require('./wageRequestService').rights(u,'policy');return db.transaction(async t=>{

@@ -6,5 +6,11 @@ module.exports=b=>{
  if(fields.instagram&&!/^https:\/\/(?:www\.)?instagram\.com\/[a-z0-9_.]+\/?$/i.test(fields.instagram))throw ApiError.badRequest('Instagram — ссылка вида https://instagram.com/имя');
  if(fields.tiktok&&!/^https:\/\/(?:www\.)?tiktok\.com\/@[a-z0-9_.]+\/?$/i.test(fields.tiktok))throw ApiError.badRequest('TikTok — ссылка вида https://tiktok.com/@имя');
  if(b.individualRate!==undefined){if(b.individualRate===null||b.individualRate==='')fields.individualRate=null;else{const n=Number(b.individualRate);if(!['string','number'].includes(typeof b.individualRate)||!Number.isFinite(n)||n<0||n>1e7||Math.abs(n*100-Math.round(n*100))>1e-6)throw ApiError.badRequest('Проверьте индивидуальную ставку');fields.individualRate=Math.round((n+Number.EPSILON)*100)/100;}}
+ if(b.parents!==undefined){
+  if(!b.parents||typeof b.parents!=='object'||Array.isArray(b.parents))throw ApiError.badRequest('Проверьте данные родителей');
+  const limits={fatherName:250,fatherPhone:80,motherName:250,motherPhone:80,address:500,note:1000},parents={};
+  for(const [key,max] of Object.entries(limits)){const value=b.parents[key]??'';if(typeof value!=='string'||value.length>max)throw ApiError.badRequest('Проверьте данные родителей');parents[key]=value.trim();}
+  fields.parents=parents;
+ }
  const weekDays=b.weekDays??[];if(!Array.isArray(weekDays)||weekDays.some(d=>!Number.isInteger(d)||d<0||d>6)||new Set(weekDays).size!==weekDays.length)throw ApiError.badRequest('Проверьте график');return {...fields,weekDays};
 };
