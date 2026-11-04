@@ -251,6 +251,44 @@ module.exports = {
         await M.PackStock.findOrCreate({ where: { packId: pack.id }, defaults: { boxes: 0, reservedBoxes: 0 } });
         return pack;
     },
+    async ensureBasePacks(user, id) {
+        admin(user);
+        return db.transaction(async t => {
+            const product = required(await Product.findByPk(id, { transaction: t }), 'Товар');
+            const existing = await M.ProductPack.findAll({ where: { productId: product.id }, transaction: t });
+            const first = existing[0];
+            const selling = await M.SellingPrice.findByPk(product.id, { transaction: t });
+            const pricePerKg = first?.salePrice != null && Number(first.capacityKg) > 0
+                ? Number(first.salePrice) / Number(first.capacityKg)
+                : selling?.price != null ? Number(selling.price) : null;
+            let created = 0;
+            for (const capacity of [2.5, 2, 1.1, 1.5]) {
+                let [box] = await M.Material.findOrCreate({
+                    where: { name: 'Коробка ' + String(capacity).replace('.', ',') + ' кг' },
+                    defaults: { unit: 'шт', kind: 'box', capacityKg: capacity, quantity: 0, unitCost: 0 },
+                    transaction: t,
+                });
+                if (box.kind !== 'box') await box.update({ kind: 'box', capacityKg: capacity, unit: 'шт' }, { transaction: t });
+                const exists = existing.some(pack => String(pack.boxMaterialId) === String(box.id));
+                if (exists) continue;
+                const [pack] = await M.ProductPack.findOrCreate({
+                    where: { productId: product.id, boxMaterialId: box.id },
+                    defaults: {
+                        capacityKg: capacity,
+                        filmQtyM: first?.filmQtyM || 0,
+                        salePrice: pricePerKg == null ? null : money(pricePerKg * capacity),
+                        laborPerBox: money(Number(product.priceForEmployee) * capacity),
+                        overheadPerBox: 0,
+                        active: true,
+                    },
+                    transaction: t,
+                });
+                await M.PackStock.findOrCreate({ where: { packId: pack.id }, defaults: { boxes: 0, reservedBoxes: 0 }, transaction: t });
+                created += 1;
+            }
+            return { productId: product.id, created };
+        });
+    },
     async updatePack(user, id, b) {
         admin(user);
         const pack = required(await M.ProductPack.findByPk(id), 'Тип коробки');
@@ -507,6 +545,18 @@ module.exports = {
             if (company) await M.Profile.create({ userId: u.id, company }, { transaction: t });
             return { id: u.id, email: u.email, name: u.name, role: u.role };
         });
+    },
+    async changePassword(user, id, b) {
+        const target = required(await User.findByPk(id), 'Пользователь');
+        const self = Number(target.id) === Number(user.id);
+        if (user.role !== 'super_admin' && !self) throw ApiError.forbiddenRequest();
+        if (self && user.role !== 'super_admin') {
+            if (typeof b.currentPassword !== 'string' || !await bcrypt.compare(b.currentPassword, target.password)) throw ApiError.badRequest('Текущий пароль неверный');
+        }
+        if (typeof b.newPassword !== 'string' || b.newPassword.length < 10 || b.newPassword.length > 72) throw ApiError.badRequest('Новый пароль — от 10 до 72 символов');
+        await target.update({ password: await bcrypt.hash(b.newPassword, 10) });
+        await Token.destroy({ where: { userId: target.id } });
+        return { id: target.id };
     },
     async updateUser(user, id, b) {
         admin(user);

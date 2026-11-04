@@ -145,7 +145,7 @@ export default function Workspace() {
                     {allowedTab==='returns'&&<Returns initialAction={intent} data={data} user={user} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab === 'payroll' && <Payroll initialAction={intent} onNavigate={selectTab} data={data} user={user} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab==='suppliers'&&<Suppliers initialAction={intent} data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
-                    {allowedTab === 'users' && <Users data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
+                    {allowedTab === 'users' && <Users data={data} user={user} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'finance' && <Finance initialAction={intent} onNavigate={selectTab} data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                 </>}
                 <footer className="op-footer">COND <span><button className="ghost" disabled={busy} onClick={() => run(async () => {}, 'Данные обновлены')}>Обновить</button></span></footer>
