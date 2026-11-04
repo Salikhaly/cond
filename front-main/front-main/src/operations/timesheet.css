@@ -1,0 +1,52 @@
+.op-timesheet-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-right: 6px;
+    background: #eef2f7;
+    color: #526173;
+}
+
+.op-timesheet-mark.worked {
+    background: #e6f6ea;
+    color: #18864b;
+}
+
+.op-timesheet-mark.off {
+    background: #f1f4f8;
+    color: #5f6c7e;
+}
+
+.op-timesheet-mark.vacation {
+    background: #e9f1ff;
+    color: #1f5fbf;
+}
+
+.op-timesheet-mark.sick {
+    background: #fff2e6;
+    color: #b15c12;
+}
+
+.op-timesheet-mark.absent {
+    background: #ffe9e9;
+    color: #b52c2c;
+}
+
+.op-timesheet-mark.reported {
+    background: #fff7e0;
+    color: #946200;
+}
+
+.op-timesheet-mark.empty {
+    background: transparent;
+    color: #c3ccd8;
+}
+
+.op-timesheet-empty td {
+    color: #9aa6b5;
+}

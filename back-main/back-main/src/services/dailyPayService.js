@@ -83,7 +83,7 @@ async function workDay(u,b){
   if(b.status==='off'&&(typeof b.comment!=='string'||!b.comment.trim()))throw ApiError.badRequest('Укажите причину: выходной, отпуск, больничный или не вышел');
   if(admin)await require('./wageRequestService').rights(u,'policy',t);
   let row=await M.WorkDay.findOne({where:{userId,date},transaction:t,lock:t.LOCK.UPDATE});
-  if(row&&row.status!=='reported')throw ApiError.badRequest('Подтверждённый день исправляется через согласование');
+  if(row&&row.status!=='reported'&&!admin)throw ApiError.badRequest('Подтверждённый день исправляется через согласование');
   const status=admin?(b.status==='off'?'off':'worked'):'reported',values={userId,date,status,comment:String(b.comment||'').slice(0,250),actorId:row?.actorId||u.id,actorName:row?.actorName||u.name,...(admin?{confirmedBy:u.id,confirmedName:u.name}:{})};
   if(row)await row.update(values,{transaction:t});else row=await M.WorkDay.create(values,{transaction:t});if(admin)await recompute(userId,date,u,t);return row;
  });

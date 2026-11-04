@@ -26,8 +26,6 @@ export default function Overview({data,setTab,user}){
  orderTask(plan.overdue,'Срок прошёл','urgent');
  if(plan.drafts.length){const p=plan.drafts[0],product=data.products.find(x=>x.id===p.productId);tasks.push({key:'draft',title:'Выпуск на проверке · '+plan.drafts.length,text:(product?.name||'Продукция')+' · '+fmt(p.kg)+' кг',tone:'waiting',action:()=>setTab('production',{kind:'check-production',id:p.id})});}
  orderTask(plan.submitted,'Новые заявки','waiting');orderTask(plan.approved,'К отгрузке','ready');
- if(plan.missingRecipes.length){const p=plan.missingRecipes[0];tasks.push({key:'recipe',title:'Нужен состав · '+plan.missingRecipes.length,text:p.name+' — выпуск пока не провести',tone:'urgent',action:()=>setTab('catalog',{kind:'recipe',productId:p.id})});}
- if(plan.emptyMaterials.length){const p=plan.emptyMaterials[0];tasks.push({key:'empty',title:'Нет материала · '+plan.emptyMaterials.length,text:plan.emptyMaterials.slice(0,3).map(m=>m.name).join(', '),tone:'urgent',action:()=>setTab('materials',{kind:'receipt',materialId:p.id})});}
  const materials=[...data.materials].sort((a,b)=>(Number(a.quantity)>0)-(Number(b.quantity)>0)||a.name.localeCompare(b.name,'ru'));
  const products=[...data.products].sort((a,b)=>Number(b.kg)-Number(a.kg));
  const totalBoxes=(data.products||[]).reduce((sum,p)=>sum+(p.packs||[]).reduce((n,pack)=>n+Number(pack.availableBoxes||0),0),0);
