@@ -31,6 +31,7 @@ function ProductEditor({ product, onBack, onSaved, run }) {
             <Field label="Цена за коробку, ₸" type="number" min="0" step="0.01" value={form.salePrice} onChange={e => change('salePrice', e.target.value)} />
             <Field label="Оплата работнику за кг, ₸" type="number" min="0" step="0.01" value={form.priceForEmployee} onChange={e => change('priceForEmployee', e.target.value)} />
             <Field label="Описание покупателю"><textarea maxLength={1500} value={form.description} onChange={e => change('description', e.target.value)} /></Field>
+            <p className="op-field-hint">При добавлении автоматически создаются коробки 2,5 / 2 / 1,1 / 1,5 кг. Цена за коробку распределится по вместимости. Изменить можно в «Упаковка → Коробки товаров».</p>
             <button disabled={!form.name || !form.weight}>Сохранить</button>
         </form>
     </section>;

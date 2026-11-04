@@ -269,11 +269,14 @@ module.exports = {
             const rate = num(b.priceForEmployee, 'ставка', true);
             const p = await Product.create({ name: text(b.name, 'название'), weight: capacity, priceForEmployee: rate, ingredients: [], additional: [], quantity: 0, weightTotal: 0, priceTotal: 0 }, { transaction: t });
             await M.Stock.create({ productId: p.id }, { transaction: t });
-            let [box] = await M.Material.findOrCreate({ where: { name: 'Коробка ' + String(capacity).replace('.', ',') + ' кг' }, defaults: { unit: 'шт', kind: 'box', capacityKg: capacity, quantity: 0, unitCost: 0 }, transaction: t });
-            if (box.kind !== 'box') await box.update({ kind: 'box', capacityKg: capacity, unit: 'шт' }, { transaction: t });
-            const [pack] = await M.ProductPack.findOrCreate({ where: { productId: p.id, boxMaterialId: box.id }, defaults: { capacityKg: capacity, filmQtyM: 0, salePrice: b.salePrice == null || b.salePrice === '' ? null : money(num(b.salePrice, 'цена за коробку', true)), laborPerBox: money(rate * capacity), overheadPerBox: 0, active: true }, transaction: t });
-            await M.PackStock.findOrCreate({ where: { packId: pack.id }, defaults: { boxes: 0, reservedBoxes: 0 }, transaction: t });
-            if (b.salePrice !== undefined && b.salePrice !== '') await pack.update({ salePrice: money(num(b.salePrice, 'цена за коробку', true)) }, { transaction: t });
+            const basePrice = b.salePrice == null || b.salePrice === '' ? null : num(b.salePrice, 'цена за коробку', true);
+            const basePerKg = basePrice == null ? null : basePrice / capacity;
+            for (const variantCapacity of [2.5, 2, 1.1, 1.5]) {
+                let [box] = await M.Material.findOrCreate({ where: { name: 'Коробка ' + String(variantCapacity).replace('.', ',') + ' кг' }, defaults: { unit: 'шт', kind: 'box', capacityKg: variantCapacity, quantity: 0, unitCost: 0 }, transaction: t });
+                if (box.kind !== 'box') await box.update({ kind: 'box', capacityKg: variantCapacity, unit: 'шт' }, { transaction: t });
+                const [pack] = await M.ProductPack.findOrCreate({ where: { productId: p.id, boxMaterialId: box.id }, defaults: { capacityKg: variantCapacity, filmQtyM: 0, salePrice: basePerKg == null ? null : money(basePerKg * variantCapacity), laborPerBox: money(rate * variantCapacity), overheadPerBox: 0, active: true }, transaction: t });
+                await M.PackStock.findOrCreate({ where: { packId: pack.id }, defaults: { boxes: 0, reservedBoxes: 0 }, transaction: t });
+            }
             if(b.photo!==undefined||b.description!==undefined)await require('./tradeService').display(user,p.id,b);
             return p;
         });
