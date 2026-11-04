@@ -214,6 +214,28 @@
     padding: 4px 8px;
 }
 
+.op-slip-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 13px;
+}
+
+.op-slip-table td {
+    border: 1px solid #dce4ee;
+    padding: 8px 10px;
+}
+
+.op-slip-table td:last-child {
+    text-align: right;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.op-slip-table tr:last-child td {
+    background: #f4f8fb;
+}
+
 @media (max-width: 620px) {
     .op-timesheet-summary {
         grid-template-columns: repeat(3, minmax(0, 1fr));

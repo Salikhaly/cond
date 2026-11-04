@@ -5,6 +5,7 @@ import useDraft, { DraftNote } from './useDraft';
 import RepresentativePay,{commissionModes} from './RepresentativePay';
 import WorkCalendar from './WorkCalendar';
 import Timesheet from './Timesheet';
+import PayrollSlip from './PayrollSlip';
 import WageRequests from './WageRequests';
 import WageRequestForm from './WageRequestForm';
 import WorkPolicySettings from './WorkPolicySettings';
@@ -15,7 +16,7 @@ export default function Payroll({ data, user, run, busy, onNavigate,initialActio
     const admin=user.role==='super_admin';
     const requestsRef=useRef(null);
     useEffect(()=>{if(initialAction?.kind==='wage-requests')requestsRef.current?.scrollIntoView({block:'start'});},[initialAction]);
-    const [view,setView]=useState('calendar'),[request,setRequest]=useState(null);
+    const [view,setView]=useState('calendar'),[request,setRequest]=useState(null),[slip,setSlip]=useState(false);
     useEffect(()=>{if(initialAction?.kind==='payroll-month'){setMonth(initialAction.month);setSelected('');setView('calendar');}if(initialAction?.kind==='wage-requests'){setSelected('');setView('requests');}if(initialAction?.kind==='work-day'){setSelected(String(initialAction.userId));setMonth(initialAction.date.slice(0,7));setView('calendar');}},[initialAction]);
     const chooseView=v=>{setView(v);setRequest(null);};
     const people=data.payees||data.workers||[];
@@ -33,9 +34,11 @@ export default function Payroll({ data, user, run, busy, onNavigate,initialActio
     const excess=Number(form.amount)>Math.max(0,m.due);
     const worker=people.find(w=>w.id===Number(selected))||(!admin?user:null);
     const dueAmount=Math.max(0,m.due),overpaid=Math.max(0,-m.due);
+    if(slip&&selected&&worker)return <PayrollSlip data={data} person={worker} month={month} onClose={()=>setSlip(false)}/>;
     return <>
         <section className="op-card">{admin&&<h2>Зарплата</h2>}
             <div className="op-form-grid">{admin && <Select label="Сотрудник" required={false} placeholder="Все сотрудники" items={people} value={selected} onChange={v=>{setSelected(v);setConfirm(false);setOverApproved(false);}} />}<Field label="Месяц зарплаты"><select aria-label="Месяц зарплаты" value={month} onChange={e=>{setMonth(e.target.value);setConfirm(false);setOverApproved(false);}}>{months.map(key=><option key={key} value={key}>{monthLabel(key)}</option>)}</select></Field></div>
+            {selected&&worker&&admin&&<div className="op-actions"><button className="secondary" onClick={()=>setSlip(true)}>Расчётный лист</button><button className="secondary" onClick={()=>setRequest({type:'adjustment',date:today()})}>Премия / удержание</button></div>}
             <div className="op-stats op-payroll-totals"><article><span>Начислено {month?'за месяц':'всего'}</span><strong>{moneyFmt(m.accrued)} <small>₸</small></strong><p>{month?monthLabel(month):'Все периоды'}</p></article><article><span>Аванс</span><strong>{moneyFmt(m.advancePaid)} <small>₸</small></strong><p>Выдано авансов</p></article><article><span>Выплачено</span><strong>{moneyFmt(m.salaryPaid)} <small>₸</small></strong><p>зарплата, без авансов</p></article><article><span>{m.due<0?'Переплата':'К выдаче'}</span><strong>{moneyFmt(Math.abs(m.due))} <small>₸</small></strong><p>{worker?.name || 'Выбранные сотрудники'}</p></article><article><span>{worker?.role==='representative'?'Отгружено':'Изготовлено'}</span><strong>{fmt(worker?.role==='representative'?(data.orders||[]).filter(o=>o.status==='shipped'&&o.userId===worker.id&&(!month||monthOf(o.shippedAt)===month)).reduce((s,o)=>s+o.lines.reduce((n,l)=>n+Number(l.kg),0),0):m.kg)} <small>кг</small></strong><p>По проведённым новым выпускам</p></article></div>
             {m.monthlySalary>0&&<p className="op-plan-context">Оклад за {month?monthLabel(month):'месяц'}: <strong>{moneyFmt(m.monthlySalary)} ₸</strong> уже входит в «Начислено».</p>}
             {month&&Math.abs(all.due-m.due)>.009&&<p className="op-plan-context">За все месяцы: <strong>{moneyFmt(all.due)} ₸</strong>{all.due<0?' · переплата':''}</p>}

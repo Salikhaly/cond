@@ -94,6 +94,9 @@ router.get('/client-prices',wrap(async req=>{if(req.user.role!=='super_admin')th
 router.post('/client-prices',wrap(req=>finance.price(req.user,req.body)));
 router.post('/suppliers',wrap(req=>finance.supplier(req.user,req.body)));
 const supplierPrices=require('../services/supplierPriceService');
+const clientBonuses=require('../services/clientBonusService');
+router.get('/client-bonuses',wrap(req=>clientBonuses.list(req.user,req.query.customerId)));
+router.post('/client-bonuses',wrap(req=>clientBonuses.save(req.user,req.body)));
 router.get('/supplier-prices',wrap(req=>supplierPrices.list(req.user,req.query.supplierId)));
 router.post('/supplier-prices',wrap(req=>supplierPrices.save(req.user,req.body)));
 router.delete('/supplier-prices/:id',wrap(req=>supplierPrices.remove(req.user,req.params.id)));

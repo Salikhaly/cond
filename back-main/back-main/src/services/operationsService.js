@@ -146,6 +146,7 @@ module.exports = {
         trade.expenseMeta=await M.ExpenseMeta.findAll();trade.expenseDecisions=await M.ExpenseDecision.findAll();
         trade.packagingVariants=await M.PackagingVariant.findAll();
         trade.supplierPrices=await M.SupplierPrice.findAll();
+        trade.clientBonuses=await M.ClientBonus.findAll({order:[['date','DESC'],['createdAt','DESC']]});
         return { ...require('./tradeFinanceService').extras(moneyData),...trade,...payrollExtra,products, archivedProducts:await Product.findAll({where:{is_active:false},attributes:['id','name','weight','priceForEmployee']}), archivedRecipes:await M.Recipe.findAll({where:{active:false}}), archivedMaterials:await M.Material.findAll({where:{active:false}}), orders, productions, payments, payroll, payrollAdvances, workers, materials, receipts, recipes, users: users.map(u => ({...u.get({plain:true}), disabled: Boolean(access.find(a => a.userId === u.id)?.disabled), company: profiles.find(p => p.userId === u.id)?.company || ''})), receiptDocuments, incomes:saleRows, outcomes };
     },
     async material(user, body) {
