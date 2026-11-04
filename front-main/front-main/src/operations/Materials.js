@@ -40,9 +40,11 @@ export default function Materials({data,run,busy,initialAction,onPaySupplier}){
    rows.push({date:r.date||'',boxes:Number(r.boxCount)||0,perBox,price:Number(r.pricePerUnit??r.unitCost)||0,amount:Number(r.lineTotal??(Number(r.quantity||0)*Number(r.unitCost||0)))||0,document:r.document||''});
   }
   rows.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  return rows[0]||null;
+  if(rows[0])return rows[0];
+  const configured=(data.supplierPrices||[]).find(row=>row.supplierName===supplier&&String(row.materialId)===String(materialId));
+  return configured?{date:'',boxes:0,perBox:Number(configured.packSize)||0,price:Number(configured.pricePerUnit)||0,amount:0,document:'Индивидуальная цена'}:null;
  };
- const supplierOptions=[...new Set([...(data.supplierDefaults||[]).map(s=>s.name),...(data.receiptDocuments||[]).map(r=>r.supplier),draft.supplier].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+ const supplierOptions=[...new Set([...(data.supplierDefaults||[]).map(s=>s.name),...(data.receiptDocuments||[]).map(r=>r.supplier),...(data.supplierPrices||[]).map(s=>s.supplierName),draft.supplier].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
  const supplierInList=supplierOptions.includes(draft.supplier);
  const supplierSelectValue=customSupplier||(draft.supplier&&!supplierInList)?'__custom':draft.supplier||'';
  const chooseSupplier=value=>{

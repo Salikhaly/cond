@@ -93,6 +93,10 @@ router.get('/trade-finance',wrap(req=>sync.cloud()?sync.tradeFinance(req.user):f
 router.get('/client-prices',wrap(async req=>{if(req.user.role!=='super_admin')throw ApiError.forbiddenRequest();return sync.cloud()?(await sync.dashboard(req.user)).clientPrices||[]:finance.prices(req.user);}));
 router.post('/client-prices',wrap(req=>finance.price(req.user,req.body)));
 router.post('/suppliers',wrap(req=>finance.supplier(req.user,req.body)));
+const supplierPrices=require('../services/supplierPriceService');
+router.get('/supplier-prices',wrap(req=>supplierPrices.list(req.user,req.query.supplierId)));
+router.post('/supplier-prices',wrap(req=>supplierPrices.save(req.user,req.body)));
+router.delete('/supplier-prices/:id',wrap(req=>supplierPrices.remove(req.user,req.params.id)));
 router.post('/client-opening/:id/cancel',financialWrite(req=>finance.cancelOpening(req.user,req.params.id,req.body)));
 router.post('/client-opening',financialWrite(req=>finance.opening(req.user,req.body)));
 router.post('/cash',financialWrite(req=>finance.payment(req.user,req.body)));
