@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api, fmt, moneyFmt } from './api';
 import Packaging from './Packaging';
 import Icon from './Icon';
@@ -47,6 +47,7 @@ export default function ProductCatalog({ data, run, busy, initialAction, onProdu
     const [packaging, setPackaging] = useState(false);
     const [search, setSearch] = useState('');
     const [archived, setArchived] = useState(false);
+    useEffect(()=>{if(initialAction?.kind==='add')setEditing({});},[initialAction]);
     if (packaging) return <><button className="ghost" onClick={() => setPackaging(false)}>← К товарам</button><Packaging data={data} run={run} busy={busy} /></>;
     const recipeProduct = (data.products || []).find(p => Number(p.id) === Number(recipeId));
     if (recipeProduct) return <RecipeEditor product={recipeProduct} data={data} run={run} busy={busy} onClose={() => setRecipeId(null)} />;

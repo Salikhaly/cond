@@ -12,7 +12,7 @@ export default function Finance({data,run,busy,onNavigate,initialAction}) {
     const [form,setForm,stored]=useDraft('expense',{category:'Прочие расходы',name:'',recipient:'',amount:'',date:today()});
     const [from,setFrom]=useState(''), [to,setTo]=useState('');
     const reviewRef=useRef(null);
-    useEffect(()=>{if(initialAction?.kind==='expenses')setScreen('expenses');if(initialAction?.kind==='cash')setScreen('cash');if(initialAction?.kind==='report-period')setScreen('reports');},[initialAction]);
+    useEffect(()=>{if(initialAction?.kind==='expenses')setScreen('expenses');if(initialAction?.kind==='cash')setScreen('cash');if(initialAction?.kind==='analytics')setScreen('analytics');if(initialAction?.kind==='report-period')setScreen('reports');},[initialAction]);
     useEffect(()=>{if(review)reviewRef.current?.scrollIntoView({block:'start'});},[review]);
     const change=(k,v)=>{setReview(false);setForm(f=>({...f,[k]:v}));};
     const filter=row=>{const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Qyzylorda',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(row.date));return(!from||day>=from)&&(!to||day<=to);};

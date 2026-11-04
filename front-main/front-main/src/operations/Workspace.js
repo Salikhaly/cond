@@ -18,6 +18,7 @@ import Overview from './Overview';
 import Customers from './Customers';
 import ProductCatalog from './ProductCatalog';
 import './workspace.css';
+import './mobile-dock.css';
 import ExportActions from './ExportActions';
 import Expenses from './Expenses';
 import StockCounts from './StockCounts';
@@ -56,6 +57,25 @@ function Login({ onLogin }) {
 
         </section></div>;
 }
+function MobileDock({tab,onSelect}) {
+    const actions = {
+        overview: [['Расход', () => onSelect('expenses', { kind: 'add' })], ['Приход', () => onSelect('materials', 'receipt')], ['Выпуск', () => onSelect('production', 'add')]],
+        materials: [['+ Приход', () => onSelect('materials', 'receipt')], ['История', () => onSelect('materials', { kind: 'history' })], ['Ревизия', () => onSelect('inventory')]],
+        packaging: [['Товары', () => onSelect('catalog')], ['Приход', () => onSelect('materials', 'receipt')], ['Заявки', () => onSelect('orders')]],
+        catalog: [['+ Товар', () => onSelect('catalog', { kind: 'add' })], ['Упаковка', () => onSelect('packaging')], ['Составы', () => onSelect('recipes')]],
+        shops: [['Магазины', () => onSelect('shops')], ['Расчёты', () => onSelect('shops', { kind: 'client-debts' })], ['Цены', () => onSelect('shops', { kind: 'prices' })]],
+        suppliers: [['Закупки', () => onSelect('suppliers')], ['Приход', () => onSelect('materials', 'receipt')], ['Отчёты', () => onSelect('finance')]],
+        production: [['+ Выпуск', () => onSelect('production', 'add')], ['Заявки', () => onSelect('orders')], ['Товары', () => onSelect('catalog')]],
+        orders: [['Новый заказ', () => onSelect('orders', { kind: 'catalog' })], ['Все заявки', () => onSelect('orders', { kind: 'filter', status: 'all' })], ['Возвраты', () => onSelect('returns')]],
+        returns: [['Все возвраты', () => onSelect('returns')], ['Заявки', () => onSelect('orders')], ['Клиенты', () => onSelect('shops')]],
+        payroll: [['Табель', () => onSelect('payroll', { kind: 'timesheet' })], ['Выплаты', () => onSelect('payroll', { kind: 'payments' })], ['Заявки', () => onSelect('orders')]],
+        finance: [['Аналитика', () => onSelect('finance', { kind: 'analytics' })], ['Расходы', () => onSelect('expenses', { kind: 'add' })], ['Заявки', () => onSelect('orders')]],
+        inventory: [['Приход', () => onSelect('materials', 'receipt')], ['Товары', () => onSelect('catalog')], ['Отчёты', () => onSelect('finance')]],
+        users: [['Обзор', () => onSelect('overview')], ['Зарплата', () => onSelect('payroll')], ['Отчёты', () => onSelect('finance')]],
+    }[tab] || [['Обзор', () => onSelect('overview')], ['Заявки', () => onSelect('orders')], ['Отчёты', () => onSelect('finance')]];
+    return <nav className="op-mobile-dock" aria-label="Быстрые действия">{actions.map(([label, action]) => <button key={label} type="button" onClick={action}>{label}</button>)}</nav>;
+}
+
 export default function Workspace() {
     const [user, setUser] = useState(null);
     const [starting, setStarting] = useState(true);
@@ -151,6 +171,7 @@ export default function Workspace() {
                 <footer className="op-footer">COND <span><button className="ghost" disabled={busy} onClick={() => run(async () => {}, 'Данные обновлены')}>Обновить</button></span></footer>
             </main>
         </div>
+        <MobileDock tab={allowedTab} onSelect={selectTab}/>
     </div>;
 }
 

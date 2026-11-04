@@ -18,7 +18,7 @@ export default function Payroll({ data, user, run, busy, onNavigate,initialActio
     const requestsRef=useRef(null);
     useEffect(()=>{if(initialAction?.kind==='wage-requests')requestsRef.current?.scrollIntoView({block:'start'});},[initialAction]);
     const [view,setView]=useState('calendar'),[request,setRequest]=useState(null),[slip,setSlip]=useState(false);
-    useEffect(()=>{if(initialAction?.kind==='payroll-month'){setMonth(initialAction.month);setSelected('');setView('calendar');}if(initialAction?.kind==='wage-requests'){setSelected('');setView('requests');}if(initialAction?.kind==='work-day'){setSelected(String(initialAction.userId));setMonth(initialAction.date.slice(0,7));setView('calendar');}},[initialAction]);
+    useEffect(()=>{if(initialAction?.kind==='payroll-month'){setMonth(initialAction.month);setSelected('');setView('calendar');}if(initialAction?.kind==='timesheet')setView('timesheet');if(initialAction?.kind==='payments')setView('payments');if(initialAction?.kind==='wage-requests'){setSelected('');setView('requests');}if(initialAction?.kind==='work-day'){setSelected(String(initialAction.userId));setMonth(initialAction.date.slice(0,7));setView('calendar');}},[initialAction]);
     const chooseView=v=>{setView(v);setRequest(null);};
     const people=data.payees||data.workers||[];
     const [month,setMonth]=useState((data.presentationDate || today()).slice(0,7)),[selected,setSelected]=useState(admin?'':String(people[0]?.id || user.id));
