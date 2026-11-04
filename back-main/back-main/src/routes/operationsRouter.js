@@ -142,6 +142,7 @@ router.post('/product-packs', wrap(req => service.createPack(req.user, req.body)
 router.post('/products/packs/ensure-all', wrap(req => service.ensureAllBasePacks(req.user)));
 router.post('/products/:id/packs/ensure', wrap(req => service.ensureBasePacks(req.user, req.params.id)));
 router.patch('/product-packs/:id', wrap(req => service.updatePack(req.user, req.params.id, req.body)));
+router.delete('/product-packs/:id', wrap(req => service.deletePack(req.user, req.params.id)));
 router.post('/packaging/variants',wrap(req=>require('../services/packagingService').create(req.user,req.body)));
 router.post('/recipes', wrap(req => service.recipe(req.user, req.body)));
 router.post('/preview', wrap(req => service.preview(req.user, req.body)));

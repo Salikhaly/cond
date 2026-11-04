@@ -308,8 +308,45 @@ module.exports = {
             if (b[key] !== undefined) values[key] = b[key] === '' || b[key] === null ? (key === 'salePrice' ? null : 0) : num(b[key], key, true);
         }
         if (b.active !== undefined) values.active = Boolean(b.active);
+        if (b.capacityKg !== undefined) {
+            const capacity = num(b.capacityKg, 'вместимость коробки');
+            if (capacity !== Number(pack.capacityKg)) {
+                const stock = await M.PackStock.findByPk(pack.id);
+                if (Number(stock?.boxes) > 0) throw ApiError.badRequest('На складе есть коробки. Сначала спишите остаток');
+                const used = await M.Production.count({ where: { packId: pack.id } });
+                if (used) throw ApiError.badRequest('По этой коробке уже была выработка. Создайте новый вариант');
+            }
+            values.capacityKg = capacity;
+        }
+        if (b.boxMaterialId !== undefined) {
+            const box = required(await M.Material.findByPk(b.boxMaterialId), 'Коробка');
+            if (box.kind !== 'box') throw ApiError.badRequest('Выберите коробку');
+            if (String(box.id) !== String(pack.boxMaterialId)) {
+                const stock = await M.PackStock.findByPk(pack.id);
+                if (Number(stock?.boxes) > 0) throw ApiError.badRequest('На складе есть коробки. Сначала спишите остаток');
+                const used = await M.Production.count({ where: { packId: pack.id } });
+                if (used) throw ApiError.badRequest('По этой коробке уже была выработка. Создайте новый вариант');
+            }
+            values.boxMaterialId = box.id;
+        }
         await pack.update(values);
         return pack;
+    },
+    async deletePack(user, id) {
+        admin(user);
+        return db.transaction(async t => {
+            const pack = required(await M.ProductPack.findByPk(id, { transaction: t }), 'Тип коробки');
+            const stock = await M.PackStock.findByPk(pack.id, { transaction: t });
+            if (Number(stock?.boxes) > 0 || Number(stock?.reservedBoxes) > 0) throw ApiError.badRequest('На складе есть коробки этой фасовки. Сначала спишите или отгрузите остаток');
+            const used = await M.Production.count({ where: { packId: pack.id }, transaction: t });
+            if (used) {
+                await pack.update({ active: false }, { transaction: t });
+                return { id: pack.id, archived: true };
+            }
+            await M.PackStock.destroy({ where: { packId: pack.id }, transaction: t });
+            await pack.destroy({ transaction: t });
+            return { id, archived: false };
+        });
     },
     async product(user, b) {
         admin(user);

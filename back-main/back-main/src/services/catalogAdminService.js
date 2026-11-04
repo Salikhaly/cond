@@ -63,7 +63,7 @@ module.exports={
   const m=await M.Material.findByPk(id,{transaction:t,lock:t.LOCK.UPDATE});if(!m)throw ApiError.notFound('Материал не найден');
   if(b.active!==undefined){
    if(typeof b.active!=='boolean')throw ApiError.badRequest('Укажите состояние материала');
-   if(!b.active){if(Number(m.quantity)>0)throw new ApiError(409,'Материал ещё есть на складе');const recipes=await M.Recipe.findAll({where:{active:true},transaction:t});if(recipes.some(r=>r.lines.some(l=>l.materialId===m.id)))throw new ApiError(409,'Материал используется в рецептуре. Сначала измените состав');}
+   if(!b.active){if(Number(m.quantity)>0)throw new ApiError(409,'Материал ещё есть на складе');if(m.kind==='box'&&await M.ProductPack.count({where:{boxMaterialId:m.id},transaction:t}))throw new ApiError(409,'Коробка используется в товаре. Сначала удалите тип коробки у товара');const recipes=await M.Recipe.findAll({where:{active:true},transaction:t});if(recipes.some(r=>r.lines.some(l=>l.materialId===m.id)))throw new ApiError(409,'Материал используется в рецептуре. Сначала измените состав');}
    return m.update({active:b.active},{transaction:t});
   }
   const values={};
