@@ -4,6 +4,7 @@ import Icon from './Icon';
 import { Field, Empty } from './Fields';
 import TradeLedger from './TradeLedger';
 import ClientPrices from './ClientPrices';
+import './clients.css';
 const fresh = {
   customerId: '',
   customerName: '',
@@ -25,7 +26,8 @@ export default function Customers({
     [screen,setScreen]=useState(['client-debts','receive-payment'].includes(initialAction?.kind)?'money':'shops'),
     [search, setSearch] = useState(''),
     [adding, setAdding] = useState(false),
-    [form, setForm] = useState(fresh);
+    [form, setForm] = useState(fresh),
+    [clientKey, setClientKey] = useState('');
   useEffect(()=>{if(['client-debts','receive-payment'].includes(initialAction?.kind))setScreen('money');},[initialAction]);
   const change = (k, v) => setForm(f => ({
     ...f,
@@ -33,10 +35,13 @@ export default function Customers({
   }));
   const outlets = (data.outlets || []).filter(o => [o.name, o.address, (data.customers || []).find(c => c.id === o.customerId)?.name].join(' ').toLowerCase().includes(search.toLowerCase()));
   const reps = (data.users || []).filter(u => u.role === 'representative' && !u.disabled);
-  const navigation=admin&&<section className="op-card"><nav className="op-report-tabs op-finance-tabs" aria-label="Клиенты">{[['shops','Магазины'],['money','Оплаты и долги'],['prices','Индивидуальные цены']].filter(([id])=>id!=='money'||data.permissions?.finance!==false).map(([id,label])=><button key={id} className={screen===id?'active':''} aria-pressed={screen===id} onClick={()=>setScreen(id)}>{label}</button>)}</nav></section>;
-  if(admin&&screen==='money')return <>{navigation}<TradeLedger data={data} run={run} busy={busy}/></>;
+  const clientOptions=(data.customers||[]).flatMap(customer=>customer.debtScope==='outlet'
+    ?(data.outlets||[]).filter(outlet=>outlet.customerId===customer.id).map(outlet=>({key:'outlet:'+outlet.id,label:customer.name+' · '+outlet.name}))
+    :[{key:'customer:'+customer.id,label:customer.name}]);
+  const navigation=admin&&<section className="op-card"><nav className="op-report-tabs op-finance-tabs" aria-label="Клиенты">{[['shops','Магазины'],['money','Оплаты и долги'],['prices','Индивидуальные цены']].filter(([id])=>id!=='money'||data.permissions?.finance!==false).map(([id,label])=><button key={id} className={screen===id?'active':''} aria-pressed={screen===id} onClick={()=>setScreen(id)}>{label}</button>)}</nav>{admin&&<div className="op-client-quick"><Field label="Быстрый выбор клиента"><select value={clientKey} onChange={e=>setClientKey(e.target.value)}><option value="">Выберите клиента</option>{clientOptions.map(item=><option key={item.key} value={item.key}>{item.label}</option>)}</select></Field><button disabled={!clientKey} onClick={()=>setScreen('money')}>Расчёты / удержание</button></div>}</section>;
+  if(admin&&screen==='money')return <>{navigation}<TradeLedger data={data} run={run} busy={busy} initialPartyKey={clientKey}/></>;
   if(admin&&screen==='prices')return <>{navigation}<ClientPrices data={data} run={run} busy={busy}/></>;
-  return <>{navigation}<section className="op-card"><div className="op-section-heading"><div><span className="op-eyebrow">{admin ? 'КЛИЕНТЫ И ТОРГОВЫЕ ТОЧКИ' : 'МОЙ МАРШРУТ'}</span><h2>{admin ? 'Магазины' : 'Мои магазины'}</h2></div>{admin && <button onClick={() => setAdding(v => !v)}>{adding ? 'Закрыть форму' : '+ Добавить магазин'}</button>}</div><Field label="Найти магазин или адрес" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Название, фирма, улица" /></section>
+  return <>{navigation}<div className="op-mobile-quickbar"><button onClick={()=>setScreen('shops')}>Магазины</button><button onClick={()=>setScreen('money')}>Расчёты</button><button onClick={()=>setScreen('prices')}>Цены</button></div><section className="op-card"><div className="op-section-heading"><div><span className="op-eyebrow">{admin ? 'КЛИЕНТЫ И ТОРГОВЫЕ ТОЧКИ' : 'МОЙ МАРШРУТ'}</span><h2>{admin ? 'Магазины' : 'Мои магазины'}</h2></div>{admin && <button onClick={() => setAdding(v => !v)}>{adding ? 'Закрыть форму' : '+ Добавить магазин'}</button>}</div><Field label="Найти магазин или адрес" type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Название, фирма, улица" /></section>
 {adding && admin && <section className="op-card"><h2>Новый магазин</h2><form onSubmit={e => {
         e.preventDefault();
         run(async () => {
