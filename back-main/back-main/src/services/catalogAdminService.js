@@ -22,7 +22,6 @@ module.exports={
    return p.update({is_active:b.active},{transaction:t});
   }
   if(!p.is_active)throw ApiError.badRequest('Сначала восстановите товар из архива');
-  if(b.salePrice!==undefined)await M.SellingPrice.upsert({productId:p.id,price:b.salePrice===''||b.salePrice===null?null:Math.round(number(b.salePrice,true)*100)/100},{transaction:t});
   const weight=number(b.weight),rate=number(b.priceForEmployee,true);
   const variant=await M.PackagingVariant.findByPk(p.id,{transaction:t});
   const rateLocked=await M.Production.count({where:{productId:p.id,status:{[Op.in]:['draft','posted']}},transaction:t});
@@ -30,6 +29,12 @@ module.exports={
   if(variant&&Math.abs(weight-Number(variant.kgPerPack))>.00001)throw ApiError.badRequest('Для другого веса создайте отдельный вариант фасовки. Вес существующего варианта сохраняется');
   if(variant&&b.packLaborPerPack!==undefined)await variant.update({laborPerPack:number(b.packLaborPerPack,true)},{transaction:t});
   await p.update({name:name(b.name),weight,priceForEmployee:rate,quantity:Math.floor((Number(p.weightTotal)+1e-8)/weight)},{transaction:t});
+  const defaultPack=await M.ProductPack.findOne({where:{productId:p.id},order:[['capacityKg','ASC']],transaction:t});
+  if(defaultPack){
+   const values={capacityKg:weight,laborPerBox:Math.round(rate*weight*100)/100};
+   if(b.salePrice!==undefined)values.salePrice=b.salePrice===''||b.salePrice===null?null:Math.round(number(b.salePrice,true)*100)/100;
+   await defaultPack.update(values,{transaction:t});
+  }
   if(await M.Recipe.findOne({where:{productId:p.id,active:true},transaction:t})){
    const calc=await require('./operationsService').calculate(p.id,Number((await M.Recipe.findOne({where:{productId:p.id},transaction:t})).outputKg),t);
    await p.update({priceTotal:Math.round((calc.costPerKg+Number.EPSILON)*100)/100},{transaction:t});
@@ -55,6 +60,10 @@ module.exports={
   if(b.name!==undefined)values.name=name(b.name);
   if(b.packUnit!==undefined)values.packUnit=optionalText(b.packUnit,'единицу упаковки',32);
   if(b.unitsPerPack!==undefined)values.unitsPerPack=b.unitsPerPack===null||b.unitsPerPack===''?null:number(b.unitsPerPack);
+  if(b.kind!==undefined){if(!['raw','box','film'].includes(b.kind))throw ApiError.badRequest('Неверный тип материала');values.kind=b.kind;}
+  if(b.unit!==undefined){if(!['кг','л','шт','м'].includes(b.unit))throw ApiError.badRequest('Неверная единица');values.unit=b.unit;}
+  if(b.capacityKg!==undefined)values.capacityKg=b.capacityKg===null||b.capacityKg===''?null:number(b.capacityKg);
+  if(b.unitCost!==undefined)values.unitCost=b.unitCost===null||b.unitCost===''?0:number(b.unitCost,true);
   if(!Object.keys(values).length)throw ApiError.badRequest('Нет данных для сохранения');
   return m.update(values,{transaction:t});
  });}

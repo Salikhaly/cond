@@ -24,13 +24,13 @@ import StockCounts from './StockCounts';
 import ActionSearch from './ActionSearch';
 import Icon,{Brand} from './Icon';
 import ExpenseDirectory from './ExpenseDirectory';
-import Money from './Money';
+import Packaging from './Packaging';
 import HistoryWorkbook from './HistoryWorkbook';
 import NotificationCenter from './NotificationCenter';
 import ApprovalsScreen from './ApprovalsScreen';
 const roles = { super_admin: 'Администратор', employee: 'Работник производства', representative: 'Торговый представитель' };
 const tabs = {
-    super_admin: [['overview', '◫', 'Обзор'], ['approvals', '✓', 'Согласования'], ['materials', '▧', 'Приходы и склад'], ['catalog', '◈', 'Готовые товары'], ['shops', '▣', 'Клиенты'],['suppliers','▣','Поставщики'], ['recipes', '⌘', 'Калькуляции'], ['production', '◈', 'Производство'], ['orders', '▤', 'Заявки'], ['returns','↩','Обмен / Возврат'], ['expenses','expense','Расходы'],['directory','directory','Справочники'],['money','money','Деньги'],['inventory','▦','Инвентаризация'],['payroll', '₸', 'Команда и зарплата'], ['finance', '▥', 'Отчёты и финансы'], ['history','directory','Данные февраля'], ['users', '⚙', 'Настройки']],
+    super_admin: [['overview', '◫', 'Обзор'], ['approvals', '✓', 'Согласования'], ['materials', '▧', 'Приходы и склад'], ['packaging', '▧', 'Упаковка'], ['catalog', '◈', 'Готовые товары'], ['shops', '▣', 'Клиенты'],['suppliers','▣','Поставщики'], ['recipes', '⌘', 'Калькуляции'], ['production', '◈', 'Производство'], ['orders', '▤', 'Заявки'], ['returns','↩','Обмен / Возврат'], ['expenses','expense','Расходы'],['directory','directory','Справочники'],['inventory','▦','Инвентаризация'],['payroll', '₸', 'Команда и зарплата'], ['finance', '▥', 'Отчёты и финансы'], ['history','directory','Данные февраля'], ['users', '⚙', 'Настройки']],
     employee: [['production', '◈', 'Моя выработка'], ['payroll', '₸', 'Моя зарплата']],
     representative: [['orders', '▤', 'Каталог и заказы'],['returns','↩','Обмен / Возврат'],['shops','▣','Мои магазины'],['payroll','₸','Моя зарплата']]
 };
@@ -116,8 +116,8 @@ export default function Workspace() {
     if (starting) return <div className="op-loading">Загружаем рабочее место…</div>;
     if (!user) return <Login onLogin={login} />;
     const permissions=data?.permissions||user.authority?.permissions||{};
-    const map={materials:'materials',catalog:'catalog',recipes:'catalog',production:'production',orders:'orders',returns:'orders',shops:'customers',suppliers:'suppliers',payroll:'payroll',finance:'finance',users:'users',expenses:'cash',directory:'catalog',money:'finance',history:'finance',inventory:'inventory'};
-    const nav=(tabs[user.role]||[]).filter(([id])=>user.role!=='super_admin'||(permissions[map[id]]!==false||id==='users'&&permissions.settings===true)).filter(([id])=>id!=='suppliers'||permissions.finance!==false).filter(([id])=>!['money','history'].includes(id)||data?.isOwner||user.authority?.owner);
+    const map={materials:'materials',packaging:'catalog',catalog:'catalog',recipes:'catalog',production:'production',orders:'orders',returns:'orders',shops:'customers',suppliers:'suppliers',payroll:'payroll',finance:'finance',users:'users',expenses:'cash',directory:'catalog',history:'finance',inventory:'inventory'};
+    const nav=(tabs[user.role]||[]).filter(([id])=>user.role!=='super_admin'||(permissions[map[id]]!==false||id==='users'&&permissions.settings===true)).filter(([id])=>id!=='suppliers'||permissions.finance!==false);
     const allowedTab=nav.some(([id])=>id===tab)?tab:nav[0]?.[0];
     const current = nav.find(t => t[0] === allowedTab) || nav[0];
     const primary = user.role === 'super_admin' ? nav.filter(([id]) => ['overview', 'materials', 'orders', 'finance'].includes(id)) : nav;
@@ -134,12 +134,12 @@ export default function Workspace() {
                     
                     {allowedTab==='history'&&data?.isOwner&&<HistoryWorkbook onNavigate={selectTab}/>}
                     {allowedTab==='directory'&&<ExpenseDirectory data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
-                    {allowedTab==='money'&&data?.isOwner&&<Money data={data} onNavigate={selectTab} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab==='expenses'&&<Expenses onNavigate={selectTab} initialAction={intent} data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab==='inventory'&&<StockCounts data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab === 'overview' && <Overview data={data} setTab={selectTab} user={user} />}
                     {allowedTab === 'approvals' && <ApprovalsScreen data={data} user={user} onNavigate={selectTab} />}
                     {allowedTab === 'materials' && <Materials onPaySupplier={id=>selectTab('suppliers',{kind:'receipt-payment',id})} data={data} run={run} initialAction={intent} busy={busy || Boolean(data?.sync?.readOnly)} />}
+                    {allowedTab === 'packaging' && <Packaging data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'recipes' && <Recipes initialAction={intent} onNavigate={selectTab} data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'production' && <Production onNavigate={selectTab} data={data} user={user} run={run} initialAction={intent} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'orders' && <Orders onReturn={id=>selectTab('returns',{kind:'return',orderId:id})} initialAction={intent} data={data} user={user} run={run} busy={busy || Boolean(data?.sync?.readOnly)} initialOutlet={orderOutlet} onShops={()=>selectTab('shops')} />}

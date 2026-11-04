@@ -13,6 +13,8 @@ async function start() {
         await require('./database/migrations/run_migrations')();
         await require('./database/migrations/create_categories')();
     }
+    await require('./services/packCatalogService').ensure();
+    await require('./services/packCatalogService').ensureBasePacks();
     if (process.env.NODE_ENV === 'production') {
         const {User} = require('./models/models');
         if (await User.count({where:{email:['admin@local.test','worker@local.test','firm@local.test']}})) throw new Error('Production database contains demo accounts. Startup refused.');

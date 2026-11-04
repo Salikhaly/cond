@@ -1,0 +1,249 @@
+.op-act-document,
+.op-invoice-sheet {
+    background: #fff;
+    color: #111;
+    border-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 10px 32px rgba(20, 35, 55, .08);
+}
+
+.op-act-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.op-act-toolbar label {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 12px;
+    color: #56657a;
+}
+
+.op-act-toolbar input {
+    padding: 7px 9px;
+    border: 1px solid #d7dee8;
+    border-radius: 8px;
+}
+
+.op-act-title {
+    margin: 4px 0 2px;
+    text-align: center;
+    font-size: 19px;
+    letter-spacing: -.2px;
+}
+
+.op-act-subtitle {
+    text-align: center;
+    font-size: 11px;
+    color: #4b596b;
+    margin: 0 0 14px;
+    line-height: 1.45;
+}
+
+.op-act-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.op-act-side h4 {
+    font-size: 11px;
+    margin: 0 0 4px;
+    color: #24364d;
+    line-height: 1.35;
+    min-height: 28px;
+}
+
+.op-act-side table,
+.op-invoice-doc table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+    line-height: 1.25;
+}
+
+.op-act-side th,
+.op-act-side td,
+.op-invoice-doc th,
+.op-invoice-doc td {
+    border: 1px solid #384556;
+    padding: 4px 5px;
+    vertical-align: top;
+}
+
+.op-act-side th,
+.op-invoice-doc th {
+    background: #eef2f7;
+    font-weight: 700;
+    text-align: left;
+}
+
+.op-act-side td:nth-child(3),
+.op-act-side td:nth-child(4),
+.op-invoice-doc td:nth-child(3),
+.op-invoice-doc td:nth-child(4),
+.op-invoice-doc td:nth-child(5) {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.op-act-opening td,
+.op-act-closing td,
+.op-act-turnover td {
+    font-weight: 700;
+    background: #f7f9fc;
+}
+
+.op-act-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0;
+    font-size: 11px;
+    border-top: 1px solid #dbe2eb;
+    padding-top: 8px;
+}
+
+.op-act-signatures {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 14px;
+    font-size: 10px;
+    line-height: 1.8;
+}
+
+.op-invoice-list {
+    display: grid;
+    gap: 0;
+}
+
+.op-invoice-doc {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    padding: 10px 0 12px;
+    border-bottom: 1px dashed #d7dee8;
+}
+
+.op-invoice-doc:last-child {
+    border-bottom: 0;
+}
+
+.op-invoice-doc h3 {
+    margin: 0;
+    font-size: 15px;
+    text-align: center;
+}
+
+.op-invoice-doc > p {
+    margin: 2px 0 6px;
+    text-align: center;
+    font-size: 10px;
+    color: #4d5b6d;
+}
+
+.op-invoice-parties {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 10px;
+}
+
+.op-invoice-total {
+    display: flex;
+    justify-content: space-between;
+    border: 1px solid #384556;
+    border-top: 0;
+    padding: 5px 7px;
+    font-size: 11px;
+}
+
+.op-invoice-signatures {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 10px;
+    font-size: 10px;
+}
+
+.op-invoice-list.density-2 .op-invoice-doc {
+    min-height: 128mm;
+}
+
+.op-invoice-list.density-3 .op-invoice-doc {
+    min-height: 84mm;
+    font-size: 9px;
+}
+
+.op-invoice-list.density-3 .op-invoice-doc table {
+    font-size: 9px;
+}
+
+.op-invoice-list.density-3 .op-invoice-doc th,
+.op-invoice-list.density-3 .op-invoice-doc td {
+    padding: 3px 4px;
+}
+
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 7mm;
+    }
+
+    body {
+        background: #fff !important;
+    }
+
+    .op-sidebar,
+    .op-topbar,
+    .op-mobilenav,
+    .op-no-print,
+    .op-footer {
+        display: none !important;
+    }
+
+    .op-main,
+    .op-content,
+    .op-workspace {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .op-act-document,
+    .op-invoice-sheet {
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
+    }
+
+    .op-act-grid {
+        gap: 6px;
+    }
+
+    .op-act-side table {
+        font-size: 8.4px;
+    }
+
+    .op-act-side th,
+    .op-act-side td {
+        padding: 2.5px 3px;
+    }
+
+    .op-invoice-list.density-2 .op-invoice-doc {
+        min-height: 135mm;
+    }
+
+    .op-invoice-list.density-3 .op-invoice-doc {
+        min-height: 86mm;
+    }
+
+    .op-invoice-doc {
+        page-break-inside: avoid;
+    }
+}

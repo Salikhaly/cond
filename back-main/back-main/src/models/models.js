@@ -188,6 +188,18 @@ const Income = sequelize.define('income', {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true
     },
+    packId: {
+        type: DataTypes.UUID,
+        allowNull: true
+    },
+    boxes: {
+        type: DataTypes.DECIMAL(16, 4),
+        allowNull: true
+    },
+    unit: {
+        type: DataTypes.STRING(16),
+        allowNull: true
+    },
     date: {
         type: DataTypes.DATE(),
         allowNull: false

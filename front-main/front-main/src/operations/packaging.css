@@ -1,0 +1,38 @@
+.op-pack-list {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0;
+}
+
+.op-pack-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    border: 1px solid #e3e9f1;
+    border-radius: 12px;
+    padding: 8px 10px;
+    background: #f9fbfe;
+}
+
+.op-pack-row span {
+    display: grid;
+    gap: 2px;
+}
+
+.op-pack-row b {
+    font-size: 14px;
+}
+
+.op-pack-row small {
+    color: #6b7788;
+    font-size: 11px;
+}
+
+.op-pack-row span:last-child {
+    text-align: right;
+}
+
+.op-product-list-card .op-product-actions {
+    flex-wrap: wrap;
+}

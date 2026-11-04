@@ -29,6 +29,17 @@ async function catalog(user) {
     const stockCounts=await M.StockCount.findAll({where:{status:'posted'},attributes:['lines']});
     const sellingPrices=await M.SellingPrice.findAll();
     const variants=await M.PackagingVariant.findAll();
+    const packs=await M.ProductPack.findAll({where:{active:true},order:[['capacityKg','ASC']]});
+    const packStocks=await M.PackStock.findAll();
+    const packagingMaterials=await M.Material.findAll({where:{kind:['box','film']}});
+    const film=packagingMaterials.find(m=>m.kind==='film')||null;
+    const packView = p => packs.filter(x=>x.productId===p.id).map(x=>{
+        const box=packagingMaterials.find(m=>m.id===x.boxMaterialId),stock=packStocks.find(s=>s.packId===x.id);
+        const costPerBox=round(Number(p.priceTotal||0)*Number(x.capacityKg)+Number(box?.unitCost||0)+Number(film?.unitCost||0)*Number(x.filmQtyM||0)+Number(x.laborPerBox||0)+Number(x.overheadPerBox||0));
+        const fallback=sellingPrices.find(s=>s.productId===p.id)?.price;
+        const salePrice=x.salePrice==null?(fallback==null?null:money(Number(fallback)*Number(x.capacityKg))):Number(x.salePrice);
+        return {id:x.id,capacityKg:Number(x.capacityKg),boxMaterialId:x.boxMaterialId,boxName:box?.name||('Коробка '+x.capacityKg+' кг'),filmQtyM:Number(x.filmQtyM||0),salePrice,costPerBox,availableBoxes:round(Number(stock?.boxes||0)-Number(stock?.reservedBoxes||0)),boxes:round(stock?.boxes||0),reservedBoxes:round(stock?.reservedBoxes||0),laborPerBox:Number(x.laborPerBox||0)};
+    });
     const used=await M.Production.findAll({where:{status:{[Op.in]:['draft','posted']}},attributes:['productId'],group:['productId']});
     const personal=user.role==='employee'?await require('./workPolicyService').at(user.id,require('./businessDay').today()):null;
     const profile=user.role==='employee'?await M.WorkProfile.findByPk(user.id):null;
@@ -37,29 +48,44 @@ async function catalog(user) {
         if (user.role === 'employee') {
             const rate=personal?.pieceRates?.find(r=>r.productId===p.id),piece=!personal||personal.mode==='piece',pack=variants.find(v=>v.productId===p.id);
             const perKg=rate?Number(rate.rate)/(rate.unit==='pack'?Number(packKg):1):profile?.individualRate!=null?Number(profile.individualRate):pack?Number(pack.laborPerPack)/Number(pack.kgPerPack):Number(p.priceForEmployee);
-            return {id:p.id,name:p.name,weight:p.weight,packKg,wageMode:personal?.mode||'piece',payRateForKg:piece?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
+            return {id:p.id,name:p.name,weight:p.weight,packKg,packs:packView(p).map(x=>({...x,costPerBox:undefined,salePrice:undefined,payPerBox:piece?(personal?.boxRate?Number(personal.boxRate):round(perKg*x.capacityKg)):null})),wageMode:personal?.mode||'piece',payRateForKg:piece?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
         }
         const s = stocks.find(s => s.productId === p.id);
         const display=displays.find(d=>d.productId===p.id);
-        const common = {stockVerified:p.additional?.stockVerified!==false||stockCounts.some(c=>c.lines.some(l=>l.kind==='product'&&Number(l.itemId)===p.id)), packKg,salePrice:sellingPrices.find(x=>x.productId===p.id)?.price ?? null,id: p.id, name: p.name, weight: p.weight, photo:display?.photo || '', description:display?.description || '', image:p.image || '', availableKg: round(Number(s.kg) - Number(s.reservedKg)) };
+        const common = {stockVerified:p.additional?.stockVerified!==false||stockCounts.some(c=>c.lines.some(l=>l.kind==='product'&&Number(l.itemId)===p.id)), packKg,packs:packView(p),salePrice:sellingPrices.find(x=>x.productId===p.id)?.price ?? null,id: p.id, name: p.name, weight: p.weight, photo:display?.photo || '', description:display?.description || '', image:p.image || '', availableKg: round(Number(s.kg) - Number(s.reservedKg)) };
         if (user.role === 'representative') return common;
         return { ...common,wageRateLocked:used.some(x=>x.productId===p.id), packLaborPerPack:variants.find(v=>v.productId===p.id)?.laborPerPack??null,kg: s.kg, reservedKg: s.reservedKg, priceForEmployee: p.priceForEmployee };
     });
 }
 
-async function calculate(productId, kg, tx, workerId, workDate) {
+async function calculate(productId, kg, tx, workerId, workDate, packId, inputBoxes) {
     const recipe = required(await M.Recipe.findOne({ where: { productId, active:true }, transaction: tx }), 'Рецептура');
     const product = required(await Product.findByPk(productId, { transaction: tx }), 'Товар');
     if(!product.is_active)throw ApiError.badRequest('Товар в архиве');
+    const pack = packId ? required(await M.ProductPack.findByPk(packId, { transaction: tx }), 'Тип коробки') : null;
+    if (pack && Number(pack.productId) !== Number(product.id)) throw ApiError.badRequest('Коробка относится к другому товару');
+    const boxes = pack ? Number(inputBoxes || (Number(kg) / Number(pack.capacityKg))) : null;
+    if (pack && (!(boxes > 0) || Math.abs(boxes - Math.round(boxes)) > 1e-7)) throw ApiError.badRequest('Укажите целое число коробок');
+    const totalKg = pack ? round(boxes * Number(pack.capacityKg)) : kg;
     const lines = [];
     for (const line of [...recipe.lines].sort((a, b) => a.materialId.localeCompare(b.materialId))) {
         const material = required(await M.Material.findByPk(line.materialId, { transaction: tx, ...(tx ? { lock: tx.LOCK.UPDATE } : {}) }), 'Материал');
         if(material.active===false)throw ApiError.badRequest('Материал в архиве: '+material.name);
-        const quantity = round(Number(line.quantity) * kg / Number(recipe.outputKg));
+        const quantity = round(Number(line.quantity) * totalKg / Number(recipe.outputKg));
         if (quantity <= 0) throw ApiError.badRequest('Слишком малый выпуск для точности учёта');
         lines.push({ materialId: material.id, name: material.name, unit: material.unit, quantity, unitCost: Number(material.unitCost), cost: round(quantity * Number(material.unitCost)), balance: Number(material.quantity), enough: Number(material.quantity) >= quantity });
     }
+    const packagingLines = [];
+    if (pack) {
+        const box = required(await M.Material.findByPk(pack.boxMaterialId, { transaction: tx, ...(tx ? { lock: tx.LOCK.UPDATE } : {}) }), 'Коробка');
+        const film = await M.Material.findOne({ where: { kind: 'film', active: true }, transaction: tx });
+        const boxQty = boxes;
+        packagingLines.push({ materialId: box.id, name: box.name, unit: box.unit, quantity: boxQty, unitCost: Number(box.unitCost), cost: money(boxQty * Number(box.unitCost)), balance: Number(box.quantity), enough: Number(box.quantity) >= boxQty });
+        const filmQty = round(boxes * Number(pack.filmQtyM || 0));
+        if (film && filmQty > 0) packagingLines.push({ materialId: film.id, name: film.name, unit: film.unit, quantity: filmQty, unitCost: Number(film.unitCost), cost: money(filmQty * Number(film.unitCost)), balance: Number(film.quantity), enough: Number(film.quantity) >= filmQty });
+    }
     const materialCost = round(lines.reduce((s, l) => s + l.cost, 0));
+    const packagingCost = round(packagingLines.reduce((s, l) => s + l.cost, 0));
     const variant=await M.PackagingVariant.findByPk(product.id,{transaction:tx});
     const policy=workerId?await require('./workPolicyService').at(workerId,workDate||require('./businessDay').today(),tx):null;
     const profile=workerId?await M.WorkProfile.findByPk(workerId,{transaction:tx}):null;
@@ -68,10 +94,11 @@ async function calculate(productId, kg, tx, workerId, workDate) {
     const personalPerKg=personalRate?Number(personalRate.rate)/(personalRate.unit==='pack'?Number(variant?.kgPerPack||product.weight):1):null;
     const profileRate=profile?.individualRate!=null?Number(profile.individualRate):null;
     const effectiveRate=personalPerKg!=null?personalPerKg:profileRate!=null?profileRate:null;
-    const laborCost=piece?money(effectiveRate!=null?kg*effectiveRate:variant?kg/Number(variant.kgPerPack)*Number(variant.laborPerPack):kg*Number(product.priceForEmployee)):0;
+    const laborCost=pack&&piece?money(boxes*Number(pack.laborPerBox||0)):piece?money(effectiveRate!=null?totalKg*effectiveRate:variant?totalKg/Number(variant.kgPerPack)*Number(variant.laborPerPack):totalKg*Number(product.priceForEmployee)):0;
     const reportedRate=effectiveRate!=null?effectiveRate:Number(product.priceForEmployee);
-    const overheadCost = round(Number(recipe.overhead) * kg / Number(recipe.outputKg));
-    return { productId: product.id, productName: product.name, kg, recipeVersion: recipe.version, workMode:policy?.mode||'piece',ratePerKg:piece?reportedRate:0, lines, materialCost, laborCost, overheadCost, totalCost: round(materialCost + laborCost + overheadCost), costPerKg: round((materialCost + laborCost + overheadCost) / kg), enough: lines.every(l => l.enough) };
+    const overheadCost = pack ? money(boxes*Number(pack.overheadPerBox||0)) : round(Number(recipe.overhead) * totalKg / Number(recipe.outputKg));
+    const totalCost = round(materialCost + packagingCost + laborCost + overheadCost);
+    return { productId: product.id, productName: product.name, kg: totalKg, boxes, packId: pack?.id||null, capacityKg: pack?Number(pack.capacityKg):null, recipeVersion: recipe.version, workMode:policy?.mode||'piece',ratePerKg:piece?reportedRate:0, lines, packagingLines, materialCost, packagingCost, laborCost, overheadCost, totalCost, costPerKg: round(totalCost / totalKg), costPerBox: boxes?round(totalCost/boxes):null, enough: [...lines,...packagingLines].every(l => l.enough) };
 }
 
 module.exports = {
@@ -91,7 +118,7 @@ module.exports = {
         Object.assign(payrollExtra,await require('./dailyPayService').visible(user),await require('./wageRequestService').visible(user));
         payrollExtra.payrollPaymentInfo=await M.PayrollPaymentInfo.findAll({where:user.role==='super_admin'?{}:{paymentId:(await M.Payment.findAll({where:{workerId:user.id},attributes:['id']})).map(p=>p.id)}});
         if (user.role === 'representative') return {...trade,products,orders,...payrollExtra,payroll:ownPayroll,payrollAdvances:await Advance.findAll({where:{salaryId:ownPayroll.map(s=>s.id)},attributes:['id','salaryId','amount','payment_type','createdAt']}),payments:await M.Payment.findAll({where:{workerId:user.id}}),company:(await M.Profile.findByPk(user.id))?.company||''};
-        const productions = await M.Production.findAll({ where: user.role === 'super_admin' ? {} : { workerId: user.id }, ...(user.role === 'employee' ? {attributes:['id','productId','workerId','kg','date','status','laborCost','postedAt','createdAt']} : {}), order: [['createdAt', 'DESC']] });
+        const productions = await M.Production.findAll({ where: user.role === 'super_admin' ? {} : { workerId: user.id }, ...(user.role === 'employee' ? {attributes:['id','productId','packId','boxes','workerId','kg','date','status','laborCost','postedAt','createdAt']} : {}), order: [['createdAt', 'DESC']] });
         const payments = await M.Payment.findAll({ where: user.role === 'super_admin' ? {} : { workerId: user.id }, order: [['date', 'DESC']] });
         const workers = await User.findAll({ where: { role: 'employee' }, attributes: ['id', 'name', 'email'], order: [['name', 'ASC']] });
         const payroll = ownPayroll;
@@ -122,10 +149,14 @@ module.exports = {
     },
     async material(user, body) {
         admin(user);
-        if (!['кг', 'л', 'шт'].includes(body.unit)) throw ApiError.badRequest('Единица: кг, л или шт');
+        const kind = ['raw', 'box', 'film'].includes(body.kind) ? body.kind : 'raw';
+        const allowedUnits = kind === 'film' ? ['м'] : kind === 'box' ? ['шт'] : ['кг', 'л', 'шт'];
+        if (!allowedUnits.includes(body.unit)) throw ApiError.badRequest(kind === 'film' ? 'Для плёнки единица — метр' : kind === 'box' ? 'Для коробки единица — штука' : 'Единица: кг, л или шт');
         const packUnit = body.packUnit == null || body.packUnit === '' ? null : text(body.packUnit, 'единицу упаковки').slice(0, 32);
         const unitsPerPack = body.unitsPerPack == null || body.unitsPerPack === '' ? null : num(body.unitsPerPack, 'штук в коробке');
-        return M.Material.create({ name: text(body.name, 'название'), unit: body.unit, packUnit, unitsPerPack });
+        const capacityKg = kind === 'box' && body.capacityKg != null && body.capacityKg !== '' ? num(body.capacityKg, 'вместимость коробки') : null;
+        const unitCost = body.unitCost == null || body.unitCost === '' ? 0 : num(body.unitCost, 'цена за единицу', true);
+        return M.Material.create({ name: text(body.name, 'название'), unit: body.unit, kind, capacityKg, unitCost, packUnit, unitsPerPack });
     },
     async receipt(user, b, transaction) {
         admin(user);
@@ -190,12 +221,58 @@ module.exports = {
     },
     async payReceipt(user,id,b){return require('./tradeFinanceService').payReceipt(user,id,b);},
     async expense(user,b){return require('./expenseService').create(user,b);},
+    async createPack(user, b) {
+        admin(user);
+        const product = required(await Product.findByPk(num(b.productId, 'товар')), 'Товар');
+        const box = required(await M.Material.findByPk(b.boxMaterialId), 'Коробка');
+        if (box.kind !== 'box') throw ApiError.badRequest('Выберите коробку');
+        const capacityKg = b.capacityKg == null || b.capacityKg === '' ? Number(box.capacityKg) : num(b.capacityKg, 'вместимость коробки');
+        if (!(capacityKg > 0)) throw ApiError.badRequest('Укажите вместимость коробки');
+        const [pack, created] = await M.ProductPack.findOrCreate({
+            where: { productId: product.id, boxMaterialId: box.id },
+            defaults: {
+                capacityKg,
+                filmQtyM: b.filmQtyM == null || b.filmQtyM === '' ? 0 : num(b.filmQtyM, 'плёнка на коробку', true),
+                salePrice: b.salePrice == null || b.salePrice === '' ? null : money(num(b.salePrice, 'цена за коробку', true)),
+                laborPerBox: b.laborPerBox == null || b.laborPerBox === '' ? 0 : num(b.laborPerBox, 'оплата за коробку', true),
+                overheadPerBox: b.overheadPerBox == null || b.overheadPerBox === '' ? 0 : num(b.overheadPerBox, 'накладные на коробку', true),
+                active: true,
+            },
+        });
+        if (!created && b.replace !== true) throw ApiError.badRequest('Такой тип коробки уже добавлен');
+        if (!created) await pack.update({
+            capacityKg,
+            filmQtyM: b.filmQtyM == null ? pack.filmQtyM : num(b.filmQtyM, 'плёнка на коробку', true),
+            salePrice: b.salePrice == null ? pack.salePrice : num(b.salePrice, 'цена за коробку', true),
+            laborPerBox: b.laborPerBox == null ? pack.laborPerBox : num(b.laborPerBox, 'оплата за коробку', true),
+            overheadPerBox: b.overheadPerBox == null ? pack.overheadPerBox : num(b.overheadPerBox, 'накладные на коробку', true),
+        });
+        await M.PackStock.findOrCreate({ where: { packId: pack.id }, defaults: { boxes: 0, reservedBoxes: 0 } });
+        return pack;
+    },
+    async updatePack(user, id, b) {
+        admin(user);
+        const pack = required(await M.ProductPack.findByPk(id), 'Тип коробки');
+        const values = {};
+        for (const key of ['filmQtyM', 'salePrice', 'laborPerBox', 'overheadPerBox']) {
+            if (b[key] !== undefined) values[key] = b[key] === '' || b[key] === null ? (key === 'salePrice' ? null : 0) : num(b[key], key, true);
+        }
+        if (b.active !== undefined) values.active = Boolean(b.active);
+        await pack.update(values);
+        return pack;
+    },
     async product(user, b) {
         admin(user);
         return db.transaction(async t => {
-            const p = await Product.create({ name: text(b.name, 'название'), weight: num(b.weight, 'вес коробки'), priceForEmployee: num(b.priceForEmployee, 'ставка', true), ingredients: [], additional: [], quantity: 0, weightTotal: 0, priceTotal: 0 }, { transaction: t });
+            const capacity = num(b.weight, 'вместимость коробки');
+            const rate = num(b.priceForEmployee, 'ставка', true);
+            const p = await Product.create({ name: text(b.name, 'название'), weight: capacity, priceForEmployee: rate, ingredients: [], additional: [], quantity: 0, weightTotal: 0, priceTotal: 0 }, { transaction: t });
             await M.Stock.create({ productId: p.id }, { transaction: t });
-            if (b.salePrice !== undefined && b.salePrice !== '') await M.SellingPrice.create({productId:p.id,price:money(num(b.salePrice,'цена продажи',true))},{transaction:t});
+            let [box] = await M.Material.findOrCreate({ where: { name: 'Коробка ' + String(capacity).replace('.', ',') + ' кг' }, defaults: { unit: 'шт', kind: 'box', capacityKg: capacity, quantity: 0, unitCost: 0 }, transaction: t });
+            if (box.kind !== 'box') await box.update({ kind: 'box', capacityKg: capacity, unit: 'шт' }, { transaction: t });
+            const [pack] = await M.ProductPack.findOrCreate({ where: { productId: p.id, boxMaterialId: box.id }, defaults: { capacityKg: capacity, filmQtyM: 0, salePrice: b.salePrice == null || b.salePrice === '' ? null : money(num(b.salePrice, 'цена за коробку', true)), laborPerBox: money(rate * capacity), overheadPerBox: 0, active: true }, transaction: t });
+            await M.PackStock.findOrCreate({ where: { packId: pack.id }, defaults: { boxes: 0, reservedBoxes: 0 }, transaction: t });
+            if (b.salePrice !== undefined && b.salePrice !== '') await pack.update({ salePrice: money(num(b.salePrice, 'цена за коробку', true)) }, { transaction: t });
             if(b.photo!==undefined||b.description!==undefined)await require('./tradeService').display(user,p.id,b);
             return p;
         });
@@ -227,7 +304,17 @@ module.exports = {
             return r;
         });
     },
-    async preview(user, b) { admin(user); return calculate(num(b.productId, 'товар'),num(b.kg,'выпуск'),undefined,b.workerId?num(b.workerId,'работник'):undefined,b.date); },
+    async preview(user, b) {
+        admin(user);
+        const productId = num(b.productId, 'товар');
+        if (b.packId) {
+            const pack = required(await M.ProductPack.findByPk(b.packId), 'Тип коробки');
+            if (Number(pack.productId) !== Number(productId)) throw ApiError.badRequest('Коробка относится к другому товару');
+            const boxes = num(b.boxes, 'количество коробок');
+            return calculate(productId, round(boxes * Number(pack.capacityKg)), undefined, b.workerId ? num(b.workerId, 'работник') : undefined, b.date, pack.id, boxes);
+        }
+        return calculate(productId, num(b.kg, 'выпуск'), undefined, b.workerId ? num(b.workerId, 'работник') : undefined, b.date);
+    },
     async production(user, b, transaction) {
         staff(user);
         const workerId = user.role === 'employee' ? user.id : num(b.workerId, 'сотрудник');
@@ -236,6 +323,15 @@ module.exports = {
         const product = required(await Product.findByPk(num(b.productId, 'товар')), 'Товар');
         if (!product.is_active) throw ApiError.badRequest('Товар неактивен');
         const create=async transaction => {
+            if (b.packId) {
+                const pack = required(await M.ProductPack.findByPk(b.packId, { transaction }), 'Тип коробки');
+                if (Number(pack.productId) !== Number(product.id)) throw ApiError.badRequest('Коробка относится к другому товару');
+                const boxes = num(b.boxes, 'количество коробок');
+                if (Math.abs(boxes - Math.round(boxes)) > 1e-7) throw ApiError.badRequest('Укажите целое число коробок');
+                const p = await M.Production.create({ workerId, productId: product.id, packId: pack.id, boxes, kg: round(boxes * Number(pack.capacityKg)), date: date(b.date) }, { transaction });
+                await require('./telegramService').productionCreated(p, product, worker, transaction);
+                return p;
+            }
             const variant=await M.PackagingVariant.findByPk(product.id,{transaction});
             const pack=require('./packagingService').quantity(variant,b);
             const p = await M.Production.create({ workerId, productId: product.id, kg: pack?.kg??num(b.kg, 'выпуск'), date: date(b.date) }, {transaction});
@@ -251,7 +347,7 @@ module.exports = {
             const p = required(await M.Production.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE }), 'Выпуск');
             if (p.status !== 'draft') throw ApiError.badRequest('Выпуск уже проведён или отменён');
             const product = required(await Product.findByPk(p.productId, { transaction: t, lock: t.LOCK.UPDATE }), 'Товар');
-            const calc = await calculate(p.productId,Number(p.kg),t,p.workerId,p.date);
+            const calc = await calculate(p.productId,Number(p.kg),t,p.workerId,p.date,p.packId,p.boxes);
             if (b.expectedCalculation !== undefined) {
                 const expected = b.expectedCalculation;
                 const fields = ['recipeVersion', 'materialCost', 'laborCost', 'overheadCost', 'totalCost'];
@@ -259,13 +355,18 @@ module.exports = {
                 if (!same) throw new ApiError(409, 'Расчёт изменился. Закройте калькуляцию и нажмите «Проверить выпуск» заново');
             }
             if (!calc.enough) throw ApiError.badRequest('Недостаточно материалов: ' + calc.lines.filter(l => !l.enough).map(l => l.name).join(', '));
-            for (const l of calc.lines) await M.Material.decrement('quantity', { by: l.quantity, where: { id: l.materialId }, transaction: t });
+            for (const l of [...calc.lines, ...(calc.packagingLines || [])]) await M.Material.decrement('quantity', { by: l.quantity, where: { id: l.materialId }, transaction: t });
             const [stock] = await M.Stock.findOrCreate({ where: { productId: p.productId }, defaults: { kg: product.weightTotal }, transaction: t });
             await stock.reload({transaction:t,lock:t.LOCK.UPDATE});
             await require('./stockValueService').production(stock,p,calc,t);
             await stock.increment('kg', { by: Number(p.kg), transaction: t });
             await stock.reload({ transaction: t });
-            await product.update({ weightTotal: stock.kg, quantity: Math.floor(Number(stock.kg) / Number(product.weight)) }, { transaction: t });
+            if (p.packId) {
+                const [packStock] = await M.PackStock.findOrCreate({ where: { packId: p.packId }, defaults: { boxes: 0, reservedBoxes: 0 }, transaction: t });
+                await packStock.increment('boxes', { by: Number(p.boxes || 0), transaction: t });
+            }
+            const capacity = p.packId ? Number(calc.capacityKg || product.weight) : Number(product.weight);
+            await product.update({ weightTotal: stock.kg, quantity: Math.floor(Number(stock.kg) / capacity) }, { transaction: t });
             // Serialize payroll updates on the worker, including first salary creation.
             await User.findByPk(p.workerId, { transaction: t, lock: t.LOCK.UPDATE });
             const start = new Date(p.date + 'T00:00:00Z'); start.setUTCDate(1);
@@ -292,8 +393,6 @@ module.exports = {
     async order(user, b) {
         if (!['representative', 'super_admin'].includes(user.role)) throw ApiError.forbiddenRequest();
         if (!Array.isArray(b.lines) || !b.lines.length || b.lines.length > 100) throw ApiError.badRequest('Добавьте товары');
-        const lines=b.lines.map(l=>({productId:num(l.productId,'товар'),kg:num(l.kg,'количество')})).sort((a,b)=>a.productId-b.productId);
-        if(new Set(lines.map(l=>l.productId)).size!==lines.length)throw ApiError.badRequest('Товар повторяется');
         return db.transaction(async t=>{
             let target=null,company;
             if(b.outletId){target=await require('./tradeService').destination(user,b.outletId,t);company=target.customer.name;}
@@ -301,9 +400,37 @@ module.exports = {
                 if(await M.Outlet.count({where:{representativeId:user.id,active:true},transaction:t}))throw ApiError.badRequest('Выберите магазин для заявки');
                 const profile=await M.Profile.findByPk(user.id,{transaction:t});if(!profile)throw ApiError.badRequest('Администратор должен закрепить за вами магазин');company=profile.company;
             }else company=text(b.company,'организацию');
-            const snapshot=[];for(const l of lines){const product=required(await Product.findByPk(l.productId,{transaction:t}),'Товар');if(!product.is_active)throw ApiError.badRequest('Товар неактивен');const price=target?await require('./tradeFinanceService').quote(target.customer.id,target.outlet.id,product.id,date(b.deliveryDate),t):(await M.SellingPrice.findByPk(product.id,{transaction:t}))?.price??null;snapshot.push({...l,name:product.name,price:price==null?null:Number(price)});}
-            for(const l of lines){const v=await M.PackagingVariant.findByPk(l.productId,{transaction:t});if(v)require('./packagingService').quantity(v,{kg:l.kg});}
-            const o=await M.Order.create({userId:target?target.outlet.representativeId:user.id,company,lines:snapshot,total:snapshot.some(l=>l.price==null)?0:money(snapshot.reduce((n,l)=>n+money(l.kg*l.price),0)),note:String(b.note||'').slice(0,2000),deliveryDate:date(b.deliveryDate)},{transaction:t});
+            const lines=[];
+            for(const raw of b.lines){
+                const productId=num(raw.productId,'товар');
+                const product=required(await Product.findByPk(productId,{transaction:t}),'Товар');
+                if(!product.is_active)throw ApiError.badRequest('Товар неактивен');
+                if(raw.packId){
+                    const pack=required(await M.ProductPack.findByPk(raw.packId,{transaction:t}),'Тип коробки');
+                    if(Number(pack.productId)!==Number(product.id))throw ApiError.badRequest('Коробка относится к другому товару');
+                    const boxes=num(raw.boxes,'количество коробок');
+                    if(Math.abs(boxes-Math.round(boxes))>1e-7)throw ApiError.badRequest('Коробки — целое число');
+                    let price=pack.salePrice==null?null:Number(pack.salePrice);
+                    if(target){
+                        const client=await M.ClientPrice.findOne({where:{productId:product.id,packId:pack.id,customerId:target.customer.id,startsOn:{[Op.lte]:date(b.deliveryDate)}},order:[['startsOn','DESC'],['revision','DESC']],transaction:t});
+                        if(client?.price!=null)price=Number(client.price);
+                        else {
+                            const perKg=await require('./tradeFinanceService').quote(target.customer.id,target.outlet.id,product.id,date(b.deliveryDate),t);
+                            if(perKg!=null)price=money(Number(perKg)*Number(pack.capacityKg));
+                        }
+                    }
+                    const capacityText = String(Number(pack.capacityKg)).replace('.', ',');
+                    lines.push({productId,packId:pack.id,boxes,capacityKg:Number(pack.capacityKg),kg:round(boxes*Number(pack.capacityKg)),name:product.name+' · '+capacityText+' кг',boxName:capacityText+' кг',price:price==null?null:money(price)});
+                } else {
+                    const kg=num(raw.kg,'количество');
+                    const price=target?await require('./tradeFinanceService').quote(target.customer.id,target.outlet.id,product.id,date(b.deliveryDate),t):(await M.SellingPrice.findByPk(product.id,{transaction:t}))?.price??null;
+                    lines.push({productId,kg,name:product.name,price:price==null?null:Number(price)});
+                }
+            }
+            lines.sort((a,b)=>a.productId-b.productId||String(a.packId||'').localeCompare(String(b.packId||'')));
+            if(new Set(lines.map(l=>String(l.productId)+':'+String(l.packId||'kg'))).size!==lines.length)throw ApiError.badRequest('Товар или коробка повторяется');
+            const amount=l=>l.packId?money(Number(l.boxes)*Number(l.price)):money(Number(l.kg)*Number(l.price));
+            const o=await M.Order.create({userId:target?target.outlet.representativeId:user.id,company,lines,total:lines.some(l=>l.price==null)?0:money(lines.reduce((n,l)=>n+amount(l),0)),note:String(b.note||'').slice(0,2000),deliveryDate:date(b.deliveryDate)},{transaction:t});
             if(target)await M.Destination.create({orderId:o.id,outletId:target.outlet.id,customerId:target.customer.id,customerName:target.customer.name,outletName:target.outlet.name,address:target.outlet.address,contact:target.outlet.contact,phone:target.outlet.phone,representativeName:user.name},{transaction:t});
             await require('./telegramService').orderCreated(o,target,user,t);
             return o;
@@ -316,11 +443,21 @@ module.exports = {
             if (user.role !== 'super_admin' && !(user.role === 'representative' && o.userId === user.id && b.status === 'cancelled')) throw ApiError.forbiddenRequest();
             const transitions = { submitted: ['approved', 'cancelled'], approved: ['shipped', 'cancelled'] };
             if (!(transitions[o.status] || []).includes(b.status)) throw ApiError.badRequest('Недопустимое изменение статуса');
+            const lineTotal = l => l.packId ? money(Number(l.boxes) * Number(l.price)) : money(Number(l.kg) * Number(l.price));
             if (b.status === 'approved') {
-                if (!Array.isArray(b.prices) || b.prices.length !== o.lines.length) throw ApiError.badRequest('Укажите цены всех товаров за кг');
-                const lines = o.lines.map((l, i) => ({ ...l, price: money(num(b.prices[i], 'цена за кг', true)) }));
-                for(const line of [...lines].sort((a,b)=>a.productId-b.productId)){const stock=required(await M.Stock.findByPk(line.productId,{transaction:t,lock:t.LOCK.UPDATE}),'Остаток');if(Number(stock.kg)-Number(stock.reservedKg)<line.kg)throw ApiError.badRequest('Не хватает готовой продукции для согласования. Сначала подтвердите выпуск');await stock.increment('reservedKg',{by:line.kg,transaction:t})}
-                await o.update({ lines, total: money(lines.reduce((s, l) => s + money(l.kg * l.price), 0)) }, { transaction: t });
+                if (!Array.isArray(b.prices) || b.prices.length !== o.lines.length) throw ApiError.badRequest('Укажите цены всех товаров');
+                const lines = o.lines.map((l, i) => ({ ...l, price: money(num(b.prices[i], l.packId ? 'цена за коробку' : 'цена за кг', true)) }));
+                for(const line of [...lines].sort((a,b)=>a.productId-b.productId)) {
+                    const stock=required(await M.Stock.findByPk(line.productId,{transaction:t,lock:t.LOCK.UPDATE}),'Остаток');
+                    if(Number(stock.kg)-Number(stock.reservedKg)<line.kg)throw ApiError.badRequest('Не хватает готовой продукции для согласования. Сначала подтвердите выпуск');
+                    await stock.increment('reservedKg',{by:line.kg,transaction:t});
+                    if(line.packId) {
+                        const [packStock]=await M.PackStock.findOrCreate({where:{packId:line.packId},defaults:{boxes:0,reservedBoxes:0},transaction:t});
+                        if(Number(packStock.boxes)-Number(packStock.reservedBoxes)<Number(line.boxes))throw ApiError.badRequest('Не хватает коробок для согласования');
+                        await packStock.increment('reservedBoxes',{by:Number(line.boxes),transaction:t});
+                    }
+                }
+                await o.update({ lines, total: money(lines.reduce((s, l) => s + lineTotal(l), 0)) }, { transaction: t });
             }
             if (b.status==='shipped' || b.status==='cancelled'&&o.status==='approved') {
                 for (const l of [...o.lines].sort((a, b) => a.productId - b.productId)) {
@@ -328,14 +465,21 @@ module.exports = {
                     const stock = required(await M.Stock.findByPk(l.productId, { transaction: t, lock: t.LOCK.UPDATE }), 'Остаток');
                     if (Number(stock.reservedKg) < l.kg || (b.status === 'shipped' && Number(stock.kg) < l.kg)) throw ApiError.badRequest('Остатки изменились. Проверьте склад');
                     await stock.decrement('reservedKg', { by: l.kg, transaction: t });
+                    if (l.packId) {
+                        const packStock=required(await M.PackStock.findOne({where:{packId:l.packId},transaction:t,lock:t.LOCK.UPDATE}),'Остаток коробок');
+                        if(Number(packStock.reservedBoxes)<Number(l.boxes))throw ApiError.badRequest('Резерв коробок изменился');
+                        await packStock.decrement('reservedBoxes',{by:Number(l.boxes),transaction:t});
+                        if(b.status==='shipped')await packStock.decrement('boxes',{by:Number(l.boxes),transaction:t});
+                    }
                     if (b.status === 'shipped') {
                         await require('./stockValueService').shipment(stock,o.id,Number(l.kg),t);
                         await stock.decrement('kg', { by: l.kg, transaction: t });
                         await stock.reload({ transaction: t });
-                        await product.update({ weightTotal: stock.kg, quantity: Math.floor(Number(stock.kg) / Number(product.weight)) }, { transaction: t });
+                        const capacity = l.packId ? Number(l.capacityKg) : Number(product.weight);
+                        await product.update({ weightTotal: stock.kg, quantity: Math.floor(Number(stock.kg) / capacity) }, { transaction: t });
                         const [relation] = await BusinessRelation.findOrCreate({ where: { name: o.company, category: 'clients' }, transaction: t });
-                        const income = await Income.create({ businessRelationId: relation.id, productId: product.id, weight: product.weight, totalWeight: l.kg, quantity: round(l.kg / Number(product.weight)), unitPrice: l.price, totalAmount: money(l.kg * l.price), date: new Date() }, { transaction: t });
-                        await M.LegacyLink.create({ id: `shipment:${o.id}:${l.productId}`, data: { incomeId: income.id } }, { transaction: t });
+                        const income = await Income.create({ businessRelationId: relation.id, productId: product.id, weight: l.packId?Number(l.capacityKg):product.weight, totalWeight: l.kg, quantity: l.packId?Number(l.boxes):round(l.kg / Number(product.weight)), unitPrice: l.price, totalAmount: lineTotal(l), packId:l.packId||null, boxes:l.packId?Number(l.boxes):null, unit:l.packId?'box':'kg', date: new Date() }, { transaction: t });
+                        await M.LegacyLink.create({ id: `shipment:${o.id}:${l.productId}:${l.packId || 'kg'}`, data: { incomeId: income.id } }, { transaction: t });
                     }
                 }
             }
@@ -358,6 +502,24 @@ module.exports = {
             if (company) await M.Profile.create({ userId: u.id, company }, { transaction: t });
             return { id: u.id, email: u.email, name: u.name, role: u.role };
         });
+    },
+    async updateUser(user, id, b) {
+        admin(user);
+        const target = required(await User.findByPk(id), 'Пользователь');
+        if (target.role === 'super_admin' && Number(target.id) !== Number(user.id)) throw ApiError.forbiddenRequest('Нельзя изменить другого администратора');
+        const values = {};
+        if (b.name !== undefined) values.name = text(b.name, 'имя');
+        if (b.email !== undefined) values.email = String(b.email).trim().toLowerCase();
+        if (b.role !== undefined) {
+            if (!['employee', 'representative'].includes(b.role) && target.role !== 'super_admin') throw ApiError.badRequest('Роль: работник или представитель');
+            values.role = b.role;
+        }
+        await target.update(values);
+        if (b.individualRate !== undefined) {
+            const [profile] = await M.WorkProfile.findOrCreate({ where: { userId: target.id }, defaults: {} });
+            await profile.update({ individualRate: b.individualRate === '' || b.individualRate === null ? null : num(b.individualRate, 'ставка', true) });
+        }
+        return { id: target.id, name: target.name, email: target.email, role: target.role };
     },
     async access(user, id, b) {
         admin(user);

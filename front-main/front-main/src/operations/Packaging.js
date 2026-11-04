@@ -1,10 +1,68 @@
-import React,{useState} from 'react';
-import {api,fmt,moneyFmt} from './api';
-import {Field,Select,Empty,Table} from './Fields';
-import {calculationEstimate} from './calculationEstimate';
-export default function Packaging({data,run,busy,onBack,onProduce}){
- const [adding,setAdding]=useState(false),[sourceId,setSourceId]=useState(''),[packageId,setPackageId]=useState(''),[sizes,setSizes]=useState([1,1.5,2,2.5,3]),[labor,setLabor]=useState('0'),[overhead,setOverhead]=useState('0'),[price,setPrice]=useState(''),[newSource,setNewSource]=useState(''),[history,setHistory]=useState('');
- const variants=data.packagingVariants||[],source=data.materials.find(m=>m.id===sourceId),sources=data.materials.filter(m=>m.unit==='кг'),packs=data.materials.filter(m=>m.id!==sourceId),groups=[...new Set(variants.map(v=>v.sourceId))];
- const add=()=>run(async()=>{await api('/packaging/variants',{sourceId,variants:sizes.filter(size=>!variants.some(v=>v.sourceId===sourceId&&Number(v.kgPerPack)===size)).map(kgPerPack=>({kgPerPack,laborPerPack:labor,overheadPerPack:overhead,salePerKg:price,lines:packageId?[{materialId:packageId,quantity:1}]:[]}))});setAdding(false);},'Варианты фасовки созданы');
- return <><button className="ghost" onClick={onBack}>← К готовым товарам</button><section className="op-card"><div className="op-section-heading"><div><h2>Фасовка</h2><p className="op-muted">Один исходный запас → разные пачки</p></div><button onClick={()=>setAdding(v=>!v)}>{adding?'Закрыть':'+ Варианты'}</button></div></section>{adding&&<section className="op-card"><h2>Что будем фасовать?</h2><form onSubmit={e=>{e.preventDefault();add();}}><Select label="Исходный товар на вес, кг" items={sources} value={sourceId} onChange={setSourceId}/><details className="op-help"><summary>+ Создать исходный товар</summary><Field label="Название исходного товара" value={newSource} onChange={e=>setNewSource(e.target.value)}/><button type="button" disabled={busy||!newSource.trim()} onClick={()=>run(async()=>{const m=await api('/materials',{name:newSource,unit:'кг'});setSourceId(m.id);setNewSource('');},'Исходный товар создан. Приход оформляется в разделе «Приходы»')}>Создать карточку</button></details>{source&&<p className="op-plan-context">Есть {fmt(source.quantity)} кг · {moneyFmt(source.unitCost)} ₸ / кг</p>}<h3>Вес одной пачки</h3><div className="op-pack-sizes">{[1,1.5,2,2.5,3].map(size=>{const exists=variants.some(v=>v.sourceId===sourceId&&Number(v.kgPerPack)===size);return <label key={size} className={sizes.includes(size)&&!exists?'selected':''}><input type="checkbox" checked={sizes.includes(size)&&!exists} disabled={exists} onChange={e=>setSizes(s=>e.target.checked?[...s,size]:s.filter(v=>v!==size))}/>{fmt(size)} кг{exists?' · уже есть':''}</label>;})}</div><Select label="Упаковочный материал на одну пачку" required={false} items={packs} placeholder="Без упаковочного материала" value={packageId} onChange={setPackageId}/><details className="op-help"><summary>Оплата работы, прочие затраты и цена</summary><div className="op-form-grid"><Field label="Работнику за пачку, ₸" type="number" min="0" step="0.01" value={labor} onChange={e=>setLabor(e.target.value)}/><Field label="Прочие затраты за пачку, ₸" type="number" min="0" step="0.01" value={overhead} onChange={e=>setOverhead(e.target.value)}/><Field label="Цена продажи за кг, ₸" type="number" min="0" step="0.01" value={price} onChange={e=>setPrice(e.target.value)}/></div></details>{source&&<div className="op-costs">{sizes.filter(size=>!variants.some(v=>v.sourceId===sourceId&&Number(v.kgPerPack)===size)).map(size=><span key={size}>{fmt(size)} кг · себестоимость пачки<b>{moneyFmt(size*Number(source.unitCost)+Number(data.materials.find(m=>m.id===packageId)?.unitCost||0)+Number(labor)+Number(overhead))} ₸</b></span>)}</div>}<button className="op-wide-action" disabled={busy||!sourceId||!sizes.some(size=>!variants.some(v=>v.sourceId===sourceId&&Number(v.kgPerPack)===size))}>Создать варианты и калькуляции</button><p className="op-muted">Состав можно уточнить в карточке каждого варианта. Запасы изменятся только после подтверждённого выпуска.</p></form></section>}{!groups.length&&!adding&&<Empty>Создайте варианты: укажите исходный товар и выберите вес пачек.</Empty>}{groups.map(id=>{const s=[...data.materials,...(data.archivedMaterials||[])].find(m=>m.id===id);const rows=variants.filter(v=>v.sourceId===id).map(v=>({...v,product:data.products.find(p=>p.id===v.productId)})).filter(v=>v.product).sort((a,b)=>Number(Number(b.product.kg)>0)-Number(Number(a.product.kg)>0)||Number(a.kgPerPack)-Number(b.kgPerPack));return <section className="op-card" key={id}><div className="op-section-heading"><div><h2>{s?.name||'Исходный товар'}</h2><p>На вес: <b>{fmt(s?.quantity)} кг</b> · {moneyFmt(s?.unitCost)} ₸ / кг</p></div><button className="ghost" onClick={()=>setHistory(history===id?'':id)}>История →</button></div><div className="op-pack-variants">{rows.map(v=>{const p=v.product,r=data.recipes.find(r=>r.productId===p.id),calc=r?calculationEstimate({recipe:r,materials:data.materials,packKg:p.packKg,laborPerPack:p.packLaborPerPack,ratePerKg:p.priceForEmployee,kg:Number(v.kgPerPack)}):null;return <article className="op-pack-variant" key={p.id}><h3>{fmt(v.kgPerPack)} кг / пачка</h3><strong>{fmt(Math.floor((Number(p.kg)+1e-8)/Number(v.kgPerPack)))} пачек</strong><small>{fmt(p.kg)} кг на складе</small><p>Себестоимость пачки<br/><b>{calc?moneyFmt(calc.totalCost)+' ₸':'Нужен состав'}</b></p>{onProduce&&<button className="secondary" onClick={()=>onProduce(p.id)}>Записать фасовку</button>}</article>;})}</div>{history===id&&<><h3>Движение исходного товара</h3><Table mobileCards headers={['Дата','Операция','Количество, кг','Стоимость, ₸']}>{(data.receipts||[]).filter(r=>r.materialId===id).map(r=><tr key={r.id}><td>{r.date}</td><td>Приход · {r.supplier}</td><td>+{fmt(r.quantity)}</td><td>{moneyFmt(Number(r.quantity)*Number(r.unitCost))}</td></tr>)}{(data.productions||[]).filter(p=>p.status==='posted'&&p.snapshot?.lines?.some(l=>l.materialId===id)).map(p=>{const l=p.snapshot.lines.find(l=>l.materialId===id);return <tr key={p.id}><td>{p.date}</td><td>Выпуск · {data.products.find(x=>x.id===p.productId)?.name}</td><td>−{fmt(l.quantity)}</td><td>{moneyFmt(l.cost)}</td></tr>;})}</Table></>}</section>;})}</>;
+import React, { useState } from 'react';
+import { api, fmt, moneyFmt } from './api';
+import { Field, Table, Empty } from './Fields';
+import './packaging.css';
+
+const emptyBox = { name: '', capacityKg: '', unitCost: '' };
+const emptyFilm = { name: 'Плёнка', unitCost: '' };
+const emptyPack = { productId: '', boxMaterialId: '', filmQtyM: '', salePrice: '', laborPerBox: '', overheadPerBox: '' };
+
+export default function Packaging({ data, run, busy }) {
+    const [tab, setTab] = useState('boxes');
+    const [boxForm, setBoxForm] = useState(emptyBox);
+    const [filmForm, setFilmForm] = useState(emptyFilm);
+    const [packForm, setPackForm] = useState(emptyPack);
+    const materials = data.materials || [];
+    const boxes = materials.filter(m => m.kind === 'box');
+    const films = materials.filter(m => m.kind === 'film');
+    const products = (data.products || []).filter(p => p.is_active !== false);
+    const packs = products.flatMap(product => (product.packs || []).map(pack => ({ ...pack, product })));
+
+    const addBox = e => {
+        e.preventDefault();
+        run(async () => {
+            await api('/materials', { name: boxForm.name || 'Коробка ' + boxForm.capacityKg + ' кг', unit: 'шт', kind: 'box', capacityKg: boxForm.capacityKg, unitCost: boxForm.unitCost });
+            setBoxForm(emptyBox);
+        }, 'Коробка добавлена');
+    };
+    const addFilm = e => {
+        e.preventDefault();
+        run(async () => {
+            await api('/materials', { name: filmForm.name, unit: 'м', kind: 'film', unitCost: filmForm.unitCost });
+            setFilmForm(emptyFilm);
+        }, 'Плёнка добавлена');
+    };
+    const addPack = e => {
+        e.preventDefault();
+        run(async () => {
+            await api('/product-packs', { ...packForm, filmQtyM: packForm.filmQtyM || 0 });
+            setPackForm(emptyPack);
+        }, 'Тип коробки добавлен товару');
+    };
+    const saveMaterial = (id, values) => run(() => api('/materials/' + id, values, 'PATCH'), 'Цена обновлена');
+    const savePack = (id, values) => run(() => api('/product-packs/' + id, values, 'PATCH'), 'Настройки коробки обновлены');
+
+    return <>
+        <section className="op-card"><div className="op-section-heading"><div><span className="op-eyebrow">УПАКОВКА</span><h2>Коробки и плёнка</h2></div></div>
+            <nav className="op-report-tabs op-order-tabs" aria-label="Упаковка">{[['boxes', 'Коробки, шт'], ['films', 'Плёнка, м'], ['packs', 'Коробки товаров']].map(([id, label]) => <button key={id} className={tab === id ? 'active' : ''} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}</nav>
+        </section>
+        {tab === 'boxes' && <>
+            <section className="op-card"><h2>Склад коробок</h2><p className="op-muted">Учёт в штуках. Вместимость используется в производстве и калькуляции.</p>
+                {boxes.length ? <Table mobileCards headers={['Коробка', 'Вместимость', 'Цена, ₸/шт', 'Остаток, шт']}>{boxes.map(box => <tr key={box.id}><td>{box.name}</td><td>{box.capacityKg ? fmt(box.capacityKg) + ' кг' : '—'}</td><td><input aria-label={'Цена коробки ' + box.name} type="number" min="0" step="0.01" defaultValue={box.unitCost} onBlur={e => Number(e.target.value) !== Number(box.unitCost) && saveMaterial(box.id, { unitCost: e.target.value })} /> ₸</td><td>{fmt(box.quantity)} шт</td></tr>)}</Table> : <Empty>Коробок пока нет. Добавьте 2,5 / 1,5 / 1,1 / 2 кг.</Empty>}
+            </section>
+            <section className="op-card"><h2>Добавить коробку</h2><form onSubmit={addBox}><div className="op-form-grid"><Field label="Название" value={boxForm.name} onChange={e => setBoxForm(f => ({ ...f, name: e.target.value }))} placeholder="Коробка 2,5 кг" /><Field label="Вместимость, кг" type="number" min="0.01" step="0.01" required value={boxForm.capacityKg} onChange={e => setBoxForm(f => ({ ...f, capacityKg: e.target.value }))} /><Field label="Цена за штуку, ₸" type="number" min="0" step="0.01" value={boxForm.unitCost} onChange={e => setBoxForm(f => ({ ...f, unitCost: e.target.value }))} /></div><button disabled={busy}>Добавить коробку</button></form></section>
+        </>}
+        {tab === 'films' && <>
+            <section className="op-card"><h2>Склад плёнки</h2><p className="op-muted">Учёт в метрах. Расход на коробку задаётся в карточке товара.</p>
+                {films.length ? <Table mobileCards headers={['Плёнка', 'Цена, ₸/м', 'Остаток, м']}>{films.map(item => <tr key={item.id}><td>{item.name}</td><td><input aria-label={'Цена плёнки ' + item.name} type="number" min="0" step="0.01" defaultValue={item.unitCost} onBlur={e => Number(e.target.value) !== Number(item.unitCost) && saveMaterial(item.id, { unitCost: e.target.value })} /> ₸</td><td>{fmt(item.quantity)} м</td></tr>)}</Table> : <Empty>Плёнки пока нет.</Empty>}
+            </section>
+            <section className="op-card"><h2>Добавить плёнку</h2><form onSubmit={addFilm}><div className="op-form-grid"><Field label="Название" required value={filmForm.name} onChange={e => setFilmForm(f => ({ ...f, name: e.target.value }))} /><Field label="Цена за метр, ₸" type="number" min="0" step="0.01" value={filmForm.unitCost} onChange={e => setFilmForm(f => ({ ...f, unitCost: e.target.value }))} /></div><button disabled={busy}>Добавить плёнку</button></form></section>
+        </>}
+        {tab === 'packs' && <>
+            <section className="op-card"><h2>Типы коробок товаров</h2><p className="op-muted">Цена и себестоимость считаются за одну коробку.</p>
+                {packs.length ? <Table mobileCards headers={['Товар', 'Коробка', 'Плёнка, м', 'Цена, ₸/коробка', 'Себестоимость', 'Остаток']}>{packs.map(pack => <tr key={pack.id}><td>{pack.product.name}</td><td>{fmt(pack.capacityKg)} кг</td><td><input aria-label={'Плёнка на коробку ' + pack.product.name} type="number" min="0" step="0.01" defaultValue={pack.filmQtyM} onBlur={e => Number(e.target.value) !== Number(pack.filmQtyM) && savePack(pack.id, { filmQtyM: e.target.value })} /></td><td><input aria-label={'Цена коробки ' + pack.product.name} type="number" min="0" step="0.01" defaultValue={pack.salePrice ?? ''} onBlur={e => savePack(pack.id, { salePrice: e.target.value })} /> ₸</td><td>{moneyFmt(pack.costPerBox)} ₸</td><td>{fmt(pack.availableBoxes)} шт</td></tr>)}</Table> : <Empty>Типов коробок пока нет.</Empty>}
+            </section>
+            <section className="op-card"><h2>Добавить тип коробки товару</h2><form onSubmit={addPack}><div className="op-form-grid"><Field label="Товар"><select required value={packForm.productId} onChange={e => setPackForm(f => ({ ...f, productId: e.target.value }))}><option value="">Выберите товар</option>{products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></Field><Field label="Коробка"><select required value={packForm.boxMaterialId} onChange={e => setPackForm(f => ({ ...f, boxMaterialId: e.target.value }))}><option value="">Выберите коробку</option>{boxes.map(box => <option key={box.id} value={box.id}>{box.name}</option>)}</select></Field><Field label="Плёнка на коробку, м" type="number" min="0" step="0.01" value={packForm.filmQtyM} onChange={e => setPackForm(f => ({ ...f, filmQtyM: e.target.value }))} /><Field label="Цена за коробку, ₸" type="number" min="0" step="0.01" value={packForm.salePrice} onChange={e => setPackForm(f => ({ ...f, salePrice: e.target.value }))} /><Field label="Оплата за коробку, ₸" type="number" min="0" step="0.01" value={packForm.laborPerBox} onChange={e => setPackForm(f => ({ ...f, laborPerBox: e.target.value }))} /></div><button disabled={busy || !boxes.length}>Добавить</button></form>{!boxes.length && <p className="op-missing">Сначала добавьте коробку во вкладке «Коробки».</p>}</section>
+        </>}
+    </>;
 }

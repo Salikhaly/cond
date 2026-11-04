@@ -17,22 +17,20 @@ function validate(){
 async function bootstrap(){
  validate();await db.authenticate();
  const [schema]=await db.query("SELECT to_regclass('public.products') AS products, COALESCE(to_regclass('public.selling_prices'),to_regclass('public.selling_price')) AS prices, to_regclass('public.receipt_documents') AS receipts");
- if(schema[0].products&&schema[0].prices){await require('./services/workbookPriceCorrections').apply();if(schema[0].receipts)await require('./database/seedSupplierComparison').apply();}
+ if(schema[0].products&&schema[0].prices){await require('./services/workbookPriceCorrections').apply();}
  const [tables]=await db.query("SELECT to_regclass('public.sync_states') AS name");
- if(tables[0].name&&await State.findByPk('public-demo-ready:v1')&&await State.findByPk('schema:returns:v1')&&await State.findByPk('schema:payroll-sales:v1')&&await State.findByPk('schema:trade-finance:v1')&&await State.findByPk('schema:stock-value:v1')&&await State.findByPk('schema:packaging:v1')&&await State.findByPk('schema:expenses:v1')&&await State.findByPk('schema:stock-counts:v1')&&await State.findByPk('schema:receipt-drafts:v1')&&await State.findByPk('schema:authority:v1')&&await State.findByPk('schema:daily-pay:v1')&&await State.findByPk('schema:cost-groups:v1')&&await State.findByPk('schema:mobile-money:v1')&&await State.findByPk('schema:receipt-packs-advances:v1')&&await State.findByPk(historyKey)&&await State.findByPk(require('./services/workbookNativeImport').marker))return;
+ if(tables[0].name&&await State.findByPk('public-demo-ready:v1')&&await State.findByPk('schema:returns:v1')&&await State.findByPk('schema:payroll-sales:v1')&&await State.findByPk('schema:trade-finance:v1')&&await State.findByPk('schema:stock-value:v1')&&await State.findByPk('schema:packaging:v1')&&await State.findByPk('schema:expenses:v1')&&await State.findByPk('schema:stock-counts:v1')&&await State.findByPk('schema:receipt-drafts:v1')&&await State.findByPk('schema:authority:v1')&&await State.findByPk('schema:daily-pay:v1')&&await State.findByPk('schema:cost-groups:v1')&&await State.findByPk('schema:mobile-money:v1')&&await State.findByPk('schema:receipt-packs-advances:v1')&&await State.findByPk(require('./services/packCatalogService').marker)&&await State.findByPk(require('./services/packCatalogService').baseMarker))return;
  const lock=new Client(process.env.ALLOW_LOCAL_PUBLIC_DEMO_TEST==='true'&&!process.env.VERCEL?{host:process.env.DB_HOST,port:process.env.DB_PORT,user:process.env.DB_USER,password:process.env.DB_PASSWORD,database:process.env.DB_NAME}:{connectionString:process.env.DATABASE_URL_UNPOOLED||process.env.DATABASE_URL,ssl:{rejectUnauthorized:true}});
  await lock.connect();
  try{
   await lock.query('SELECT pg_advisory_lock(42810277)');
   const check=await lock.query("SELECT to_regclass('public.sync_states') AS name");
-  if(check.rows[0].name&&await State.findByPk('public-demo-ready:v1')&&await State.findByPk('schema:returns:v1')&&await State.findByPk('schema:payroll-sales:v1')&&await State.findByPk('schema:trade-finance:v1')&&await State.findByPk('schema:stock-value:v1')&&await State.findByPk('schema:packaging:v1')&&await State.findByPk('schema:expenses:v1')&&await State.findByPk('schema:stock-counts:v1')&&await State.findByPk('schema:receipt-drafts:v1')&&await State.findByPk('schema:authority:v1')&&await State.findByPk('schema:daily-pay:v1')&&await State.findByPk('schema:cost-groups:v1')&&await State.findByPk('schema:mobile-money:v1')&&await State.findByPk('schema:receipt-packs-advances:v1')&&await State.findByPk(historyKey)&&await State.findByPk(require('./services/workbookNativeImport').marker))return;
+  if(check.rows[0].name&&await State.findByPk('public-demo-ready:v1')&&await State.findByPk('schema:returns:v1')&&await State.findByPk('schema:payroll-sales:v1')&&await State.findByPk('schema:trade-finance:v1')&&await State.findByPk('schema:stock-value:v1')&&await State.findByPk('schema:packaging:v1')&&await State.findByPk('schema:expenses:v1')&&await State.findByPk('schema:stock-counts:v1')&&await State.findByPk('schema:receipt-drafts:v1')&&await State.findByPk('schema:authority:v1')&&await State.findByPk('schema:daily-pay:v1')&&await State.findByPk('schema:cost-groups:v1')&&await State.findByPk('schema:mobile-money:v1')&&await State.findByPk('schema:receipt-packs-advances:v1')&&await State.findByPk(require('./services/packCatalogService').marker)&&await State.findByPk(require('./services/packCatalogService').baseMarker))return;
   await db.sync();await require('./database/upgradeOperations')();
   if(!await State.findByPk('public-demo-ready:v1'))await require('./database/seedPublicDemo')();
   await require('./database/seedDemoPrices')();
-  await db.transaction(async transaction=>{await require('./services/historyWorkbookService').importWorkbook(historySource,transaction);await State.findOrCreate({where:{key:historyKey},defaults:{value:{source:historySource.name}},transaction});});
-  await require('./services/workbookNativeImport').importNative();
-  await require('./services/workbookPriceCorrections').apply();
-  await require('./database/seedSupplierComparison').apply();
+  await require('./services/packCatalogService').ensure();
+  await require('./services/packCatalogService').ensureBasePacks();
   await State.findOrCreate({where:{key:'schema:mobile-money:v1'},defaults:{value:{version:1}}});
   await State.findOrCreate({where:{key:'schema:receipt-packs-advances:v1'},defaults:{value:{version:1}}});
   await State.findOrCreate({where:{key:'schema:daily-pay:v1'},defaults:{value:{version:1}}});
@@ -65,5 +63,5 @@ module.exports=async(req,res)=>{
   const work=new Promise(resolve=>res.once('finish',()=>{if(res.statusCode>=400)return resolve();telegram.tick({limit:3}).catch(()=>console.error('Telegram queue processing failed')).finally(resolve);}));
   require('@vercel/functions').waitUntil(work);
  }
- return app(req,res);}catch(e){console.error('Demo initialization:',e.message);res.statusCode=503;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({message:'Демоверсия запускается. Повторите через несколько секунд.'}));}
+ return app(req,res);}catch(e){console.error('Demo initialization:',e.stack||e.message);res.statusCode=503;res.setHeader('Content-Type','application/json');res.end(JSON.stringify({message:'Демоверсия запускается. Повторите через несколько секунд.'}));}
 };
