@@ -59,7 +59,7 @@ export function ReconciliationAct({ party, supplier = false, entries: ledgerEntr
     return <section className="op-act-document">
         <div className="op-actions op-no-print"><button onClick={() => window.print()}>Печать / PDF</button><button className="secondary" onClick={onClose}>Назад</button></div>
         <div className="op-act-toolbar op-no-print"><label>Период с <input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>по <input type="date" value={to} onChange={e => setTo(e.target.value)} /></label><span>1 лист A4</span></div>
-        <h2 className="op-act-title">Акт сверки № {String(party?.key || party?.id || '').split(':').pop().slice(0, 10).toUpperCase()} от {dateText(to)} г.</h2>
+        <h2 className="op-act-title">Акт сверки № {String(party?.key || party?.id || '').split(':').pop().replace(/-/g, '').slice(0, 8).toUpperCase()} от {dateText(to)} г.</h2>
         <p className="op-act-subtitle">взаимных расчётов за период с {dateText(from)} по {dateText(to)} между <b>{party?.name}</b> и <b>{ours}</b></p>
         <p className="op-act-subtitle">Мы, нижеподписавшиеся, составили настоящий акт сверки в том, что состояние взаимных расчётов по данным учёта следующее:</p>
         <div className="op-act-grid">
