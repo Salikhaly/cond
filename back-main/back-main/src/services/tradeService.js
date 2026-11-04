@@ -149,6 +149,42 @@ async function assign(u, id, b) {
     return o;
   });
 }
+async function editCustomer(u, id, b) {
+  admin(u);
+  if (!uuid(id)) throw ApiError.badRequest('Клиент не найден');
+  return db.transaction(async t => {
+    const customer = await M.Customer.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
+    if (!customer) throw ApiError.notFound('Клиент не найден');
+    if (b.name !== undefined) customer.name = text(b.name, 'название клиента');
+    if (b.debtScope !== undefined) {
+      if (!['company', 'outlet'].includes(b.debtScope)) throw ApiError.badRequest('Выберите порядок расчётов');
+      customer.debtScope = b.debtScope;
+    }
+    await customer.save({ transaction: t });
+    return customer;
+  });
+}
+async function editOutlet(u, id, b) {
+  admin(u);
+  if (!uuid(id)) throw ApiError.badRequest('Магазин не найден');
+  return db.transaction(async t => {
+    const outlet = await M.Outlet.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE });
+    if (!outlet) throw ApiError.notFound('Магазин не найден');
+    const values = {};
+    if (b.name !== undefined) values.name = text(b.name, 'название магазина');
+    if (b.address !== undefined) values.address = text(b.address, 'адрес магазина');
+    if (b.contact !== undefined) values.contact = text(b.contact, 'контакт', true);
+    if (b.phone !== undefined) values.phone = text(b.phone, 'телефон', true, 40);
+    if (b.representativeId !== undefined) {
+      const rep = await User.findByPk(integer(b.representativeId), { transaction: t });
+      if (!rep || rep.role !== 'representative') throw ApiError.badRequest('Выберите представителя');
+      if ((await M.Access.findByPk(rep.id, { transaction: t }))?.disabled) throw ApiError.badRequest('Доступ представителя закрыт');
+      values.representativeId = rep.id;
+    }
+    await outlet.update(values, { transaction: t });
+    return outlet;
+  });
+}
 async function display(u, id, b) {
   admin(u);
   const product = await Product.findByPk(integer(id));
@@ -190,5 +226,7 @@ module.exports = {
   destination,
   outlet,
   assign,
+  editCustomer,
+  editOutlet,
   display
 };

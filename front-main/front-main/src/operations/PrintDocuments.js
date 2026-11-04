@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { fmt, moneyFmt, today } from './api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { api, fmt, moneyFmt, today } from './api';
 import './print.css';
 
 const money = value => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const dateText = value => value ? new Date(value + 'T00:00:00').toLocaleDateString('ru-RU') : '';
+const rowDate = value => value ? String(value).slice(0, 10) : '';
 const monthStart = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10); };
 const ones = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять', 'десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать', 'семнадцать', 'восемнадцать', 'девятнадцать'];
 const tens = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
@@ -39,27 +40,39 @@ function ActTable({ title, rows, opening, debit, credit, closing }) {
     </tbody></table></div>;
 }
 
-export function ReconciliationAct({ party, supplier = false, entries: ledgerEntries = [], company = 'COND', onClose }) {
+export function ReconciliationAct({ party, supplier = false, entries: ledgerEntries = [], returns: partyReturns = [], company = 'COND', onClose }) {
     const [from, setFrom] = useState(monthStart());
     const [to, setTo] = useState(today());
+    const [actNumber, setActNumber] = useState('');
+    useEffect(() => {
+        if (!party?.key) return;
+        let active = true;
+        api('/act-number', { partyKey: party.key, from, to }, 'POST').then(result => { if (active) setActNumber(result.label || ''); }).catch(() => {});
+        return () => { active = false; };
+    }, [party?.key, from, to]);
     const data = useMemo(() => {
         const docs = (party?.documents || []).filter(doc => !doc.isOpening && (!doc.date || (doc.date >= from && doc.date <= to)));
         const entries = (ledgerEntries.length ? ledgerEntries : party?.entries || []).filter(entry => entry.partyKey === party?.key && entry.status === 'posted' && entry.date >= from && entry.date <= to);
         const rows = [];
         for (const doc of docs) rows.push({ date: doc.date || doc.deliveryDate, document: doc.document || 'Накладная № ' + String(doc.id).slice(0, 8).toUpperCase(), debit: supplier ? 0 : money(doc.total), credit: supplier ? money(doc.total) : 0 });
         for (const entry of entries) rows.push({ date: entry.date, document: (entry.method ? 'Оплата · ' + entry.method : 'Оплата') + (entry.comment ? ' · ' + entry.comment : ''), debit: supplier ? money(entry.amount) : 0, credit: supplier ? 0 : money(entry.amount) });
+        if (!supplier) {
+            for (const item of partyReturns.filter(row => row.status === 'posted' && (!row.postedAt || (String(row.postedAt).slice(0, 10) >= from && String(row.postedAt).slice(0, 10) <= to)))) {
+                rows.push({ date: rowDate(item.postedAt), document: 'Возврат № ' + String(item.id).slice(0, 8).toUpperCase() + (item.reason ? ' · ' + item.reason : ''), debit: 0, credit: money(item.total) });
+            }
+        }
         rows.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
         const opening = supplier ? Number(party?.opening || 0) : Number(party?.opening || 0);
         const debit = rows.reduce((sum, row) => sum + Number(row.debit || 0), 0);
         const credit = rows.reduce((sum, row) => sum + Number(row.credit || 0), 0);
         const closing = supplier ? Math.max(0, opening + credit - debit) : Math.max(0, opening + debit - credit);
         return { rows, opening, debit, credit, closing };
-    }, [party, supplier, from, to]);
+    }, [party, supplier, partyReturns, from, to]);
     const ours = company;
     return <section className="op-act-document">
         <div className="op-actions op-no-print"><button onClick={() => window.print()}>Печать / PDF</button><button className="secondary" onClick={onClose}>Назад</button></div>
         <div className="op-act-toolbar op-no-print"><label>Период с <input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>по <input type="date" value={to} onChange={e => setTo(e.target.value)} /></label><span>1 лист A4</span></div>
-        <h2 className="op-act-title">Акт сверки № {String(party?.key || party?.id || '').split(':').pop().replace(/-/g, '').slice(0, 8).toUpperCase()} от {dateText(to)} г.</h2>
+        <h2 className="op-act-title">Акт сверки № {actNumber || String(party?.key || party?.id || '').split(':').pop().replace(/-/g, '').slice(0, 8).toUpperCase()} от {dateText(to)} г.</h2>
         <p className="op-act-subtitle">взаимных расчётов за период с {dateText(from)} по {dateText(to)} между <b>{party?.name}</b> и <b>{ours}</b></p>
         <p className="op-act-subtitle">Мы, нижеподписавшиеся, составили настоящий акт сверки в том, что состояние взаимных расчётов по данным учёта следующее:</p>
         <div className="op-act-grid">

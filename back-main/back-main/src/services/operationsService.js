@@ -608,6 +608,18 @@ module.exports = {
         await Token.destroy({ where: { userId: target.id } });
         return { id: target.id };
     },
+    async actNumber(user, b) {
+        admin(user);
+        const partyKey = text(b.partyKey, 'сторона акта');
+        const from = date(b.from), to = date(b.to);
+        return db.transaction(async t => {
+            const existing = await M.ActRegister.findOne({ where: { partyKey, from, to }, transaction: t });
+            if (existing) return { number: existing.number, label: 'АКТ-' + to.slice(0, 4) + '-' + String(existing.number).padStart(6, '0') };
+            const max = await M.ActRegister.max('number', { transaction: t });
+            const row = await M.ActRegister.create({ number: Number(max || 0) + 1, partyKey, from, to, createdBy: user.id, createdByName: user.name }, { transaction: t });
+            return { number: row.number, label: 'АКТ-' + to.slice(0, 4) + '-' + String(row.number).padStart(6, '0') };
+        });
+    },
     async updateUser(user, id, b) {
         admin(user);
         const target = required(await User.findByPk(id), 'Пользователь');
