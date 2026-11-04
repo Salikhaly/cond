@@ -11,7 +11,7 @@ async function main(){
     const {User,Product,Salary,Advance,Outcome}=require('../src/models/models'),M=require('../src/models/operations');
     const ops=require('../src/services/operationsService'),repPay=require('../src/services/representativePayrollService'),returns=require('../src/services/returnsService');
     const users=await User.findAll(),admin=users.find(u=>u.role==='super_admin').toJSON(),worker=users.find(u=>u.role==='employee').toJSON(),rep=users.find(u=>u.role==='representative').toJSON(),p=await Product.findOne();
-    const date='2026-10-28',month='2026-10';
+    const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Qyzylorda',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),month=date.slice(0,7);
     await M.SellingPrice.create({productId:p.id,price:2000});
     const catalog=await ops.catalog(rep);check(Number(catalog[0].salePrice)===2000&&!('priceForEmployee'in catalog[0]),'Representative sees sale price but not worker rate or cost');
     const unknown=await ops.product(admin,{name:'Без цены',weight:1,priceForEmployee:1});check((await ops.catalog(rep)).find(x=>x.id===unknown.id).salePrice===null,'Missing selling price remains unknown');
@@ -50,7 +50,7 @@ async function main(){
     await ops.payment(admin,{workerId:worker.id,amount:4000,date,salaryMonth:month,allowOverAdvance:true,note:'Аванс сотруднику вперёд'});
     check(Number((await Salary.findOne({where:{userId:worker.id}})).advanced_amount)===4000,'Worker can also receive an administrator-approved excess advance');
     const newWorker=await ops.user(admin,{name:'Без выработки',email:'no-output@local.test',password:'Local2026!demo',role:'employee'});
-    await ops.payment(admin,{workerId:newWorker.id,amount:500,date,salaryMonth:'2026-11',allowOverAdvance:true,note:'До первого выпуска'});
+    await ops.payment(admin,{workerId:newWorker.id,amount:500,date,salaryMonth:month,allowOverAdvance:true,note:'До первого выпуска'});
     check(Number((await Salary.findOne({where:{userId:newWorker.id}})).total_amount)===0,'Advance can be issued before any production or salary accrual');
     await assert.rejects(()=>ops.payment(worker,{workerId:worker.id,amount:1,date,allowOverAdvance:true}));n++;
     await assert.rejects(()=>repPay.post(rep,{...paid,fingerprint:calc.fingerprint}));n++;

@@ -10,11 +10,14 @@ function amount(v,label,negative=false){const n=Number(v);if(!['number','string'
 function monthOf(d){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Qyzylorda',year:'numeric',month:'2-digit'}).format(new Date(d));}
 async function calculation(b,t){
     const bounds=require('./payrollPeriod')(b.month),user=await User.findByPk(b.userId,{transaction:t});
-    if(!user||user.role!=='representative')throw ApiError.badRequest('Выберите торгового представителя');
+    if(!user||!['employee','representative'].includes(user.role))throw ApiError.badRequest('Выберите сотрудника');
     if(!['shipments','payments','margin','profit'].includes(b.mode))throw ApiError.badRequest('Выберите базу процента');
     const fixed=amount(b.fixed,'оклад'),percent=amount(b.percent,'процент');
     if(percent>100)throw ApiError.badRequest('Процент должен быть от 0 до 100');
     const rule=await require('./workPolicyService').at(user.id,new Date(bounds.end.getTime()+5*3600000-86400000).toISOString().slice(0,10),t);if(rule&&rule.mode!=='monthly')throw ApiError.badRequest('У сотрудника действует ежедневное правило. Месячный расчёт поверх него не начисляется');
+    if(user.role==='employee'&&(!rule||rule.mode!=='monthly'||percent!==0||fixed!==Number(rule.monthlySalary)))throw ApiError.badRequest('Оклад работника берётся из согласованных условий. Выберите месячный оклад, процент — 0');
+    if(user.role==='employee'&&await M.Production.count({where:{workerId:user.id,status:'posted',date:{[Op.gte]:b.month+'-01',[Op.lt]:new Date(bounds.end.getTime()+5*3600000).toISOString().slice(0,10)},laborCost:{[Op.ne]:0}},transaction:t}))throw ApiError.badRequest('В месяце уже есть сдельные начисления. Согласуйте переход с нового месяца');
+    if(rule?.mode==='monthly'&&fixed!==Number(rule.monthlySalary))throw ApiError.badRequest('Оклад отличается от согласованных условий. Сначала согласуйте изменение оклада');
     const orders=await M.Order.findAll({where:{userId:user.id,status:'shipped'},transaction:t});
     const periodOrders=orders.filter(o=>monthOf(o.shippedAt)===b.month);
     const returns=await M.GoodsReturn.findAll({where:{status:'posted',orderId:orders.map(o=>o.id),postedAt:{[Op.gte]:bounds.start,[Op.lt]:bounds.end}},transaction:t});
@@ -53,7 +56,7 @@ async function post(user,b,transaction){
     admin(user);if(b.mode==='profit')await require('./authorityService').owner(user);
     const save=async t=>{
         const target=await User.findByPk(b.userId,{transaction:t,lock:t.LOCK.UPDATE});
-        if(!target||target.role!=='representative')throw ApiError.badRequest('Выберите представителя');
+        if(!target||!['employee','representative'].includes(target.role))throw ApiError.badRequest('Выберите сотрудника');
         const calc=await calculation(b,t);
         if(!b.fingerprint||b.fingerprint!==calc.fingerprint)throw new ApiError(409,'Расчёт изменился. Проверьте начисление заново');
         const latest=await M.RepAccrual.findOne({where:{userId:target.id,month:b.month},order:[['version','DESC']],transaction:t});

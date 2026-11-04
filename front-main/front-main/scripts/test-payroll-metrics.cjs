@@ -9,3 +9,9 @@ const team=reports(data,'2026-10-01','2026-10-31');check(team.workers.find(w=>w.
 const old=calendarMetrics({...data,payroll:data.payroll.map(s=>s.id===7?{...s,total_amount:4000}:s)},1,'2026-10');check(old.unallocated===850,'Historical monthly difference remains explicit');
 check(!financialMetrics({...data,payrollUnallocated:[{month:'2026-10',amount:850}]},'2026-10-01','2026-10-31').complete,'Unallocated historical wages block exact profit');
 console.log(count+' payroll calendar and report checks passed');
+
+const {payrollMetrics}=require('../src/operations/payrollMetrics');
+const fixed={workers:[{id:1}],payroll:[],workPolicies:[{userId:1,startsOn:'2026-11-01',mode:'monthly',monthlySalary:180000}]};
+check(payrollMetrics(fixed,1,'2026-11').accrued===0,'Agreed fixed salary is not fabricated as a recognized accrual');
+check(payrollMetrics({...fixed,payroll:[{userId:1,date:'2026-11-01',total_amount:180000,advanced_amount:50000}]},1,'2026-11').due===130000,'Posted monthly salary counted once and advance deducted');
+check(payrollMetrics({...fixed,workPolicies:[...fixed.workPolicies,{userId:1,startsOn:'2026-12-01',mode:'piece'}]},1,'2026-12').monthlySalary===0,'A newer piece policy does not retain an obsolete fixed salary');

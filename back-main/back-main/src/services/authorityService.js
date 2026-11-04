@@ -44,7 +44,7 @@ async function authorize(req){
   return;
  }
  const a=req.user.authority||await access(req.user);if(a.owner)return;const p=a.permissions,path=req.path,write=!['GET','HEAD'].includes(req.method),segment=path.split('/')[1];
- if(['audit','exchange','authority','money','money-accounts','money-documents','money-links'].includes(segment))throw ApiError.forbiddenRequest('Раздел доступен владельцу');
+ if(['account-email-status','staff-invitations','audit','exchange','authority','money','money-accounts','money-documents','money-links'].includes(segment))throw ApiError.forbiddenRequest('Раздел доступен владельцу');
  if(segment==='sync'&&write)throw ApiError.forbiddenRequest('Отправку копии запускает владелец');
  let permission={'expense-articles':'catalog','staff-contacts':'payroll',products:'catalog',recipes:'catalog',packaging:'catalog',materials:'materials',receipts:'materials','receipt-drafts':'materials','stock-counts':'inventory',orders:'orders',returns:'orders','return-credits':'cash',outlets:'customers','client-prices':'customers',suppliers:'suppliers','trade-finance':'finance',expenses:'cash',payments:'payroll','representative-payroll':'payroll',users:'users',telegram:'settings',reconciliation:'settings',preview:'production',productions:'production',cash:'cash','work-days':'payroll','work-profiles':'payroll','work-recalculate':'payroll'}[segment];
  if(segment==='wage-requests'){
@@ -60,7 +60,7 @@ async function authorize(req){
  let effectiveDate=req.body?.date||req.body?.payload?.date;
  let approvedPastOutput=false;
  if(write&&path.endsWith('/post')&&segment==='productions'){const id=path.split('/')[2];effectiveDate=(await M.Production.findByPk(id))?.date;approvedPastOutput=!!await M.WageRequest.findOne({where:{type:'late_production',status:'approved',productionId:id}});}
- if(write&&path.endsWith('/post')&&segment==='stock-counts')effectiveDate=(await M.StockCount.findByPk(path.split('/')[2]))?.date;
+ if(write&&['/post','/accept'].some(end=>path.endsWith(end))&&segment==='stock-counts')effectiveDate=(await M.StockCount.findByPk(path.split('/')[2]))?.date;
  if(write&&['receipts','receipt-drafts'].includes(segment)){
   let payload=req.body?.payload||req.body;if(segment==='receipt-drafts'&&path.endsWith('/post')&&!req.body?.payload)payload=(await M.ReceiptDraft.findByPk(path.split('/')[2]))?.payload||{};
   effectiveDate=payload?.date||effectiveDate;

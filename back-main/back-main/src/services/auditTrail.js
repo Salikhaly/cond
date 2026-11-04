@@ -1,7 +1,7 @@
 const M=require('../models/operations'),{Product,User}=require('../models/models'),{createHash}=require('crypto');
 async function snapshot(req,result){
  const type=req.path.split('/')[1],id=type==='recipes'?(req.params.id??req.body.productId):(req.params.id??result?.id);
- const models={'expense-articles':M.ExpenseArticle,'money-accounts':M.MoneyAccount,'money-documents':M.MoneyDocument,'work-days':M.WorkDay,'wage-requests':M.WageRequest,'work-profiles':M.WorkProfile,authority:M.AccountAuthority,products:Product,materials:M.Material,recipes:M.Recipe,suppliers:M.Supplier,outlets:M.Outlet,'receipt-drafts':M.ReceiptDraft,'stock-counts':M.StockCount,productions:M.Production,orders:M.Order,cash:M.CashEntry,payments:M.Payment,returns:M.GoodsReturn};
+ const models={'expense-articles':M.ExpenseArticle,'money-accounts':M.MoneyAccount,'money-documents':M.MoneyDocument,'work-days':M.WorkDay,'wage-requests':M.WageRequest,'work-profiles':M.WorkProfile,authority:M.AccountAuthority,users:M.Access,products:Product,materials:M.Material,recipes:M.Recipe,suppliers:M.Supplier,outlets:M.Outlet,'receipt-drafts':M.ReceiptDraft,'stock-counts':M.StockCount,productions:M.Production,orders:M.Order,cash:M.CashEntry,payments:M.Payment,returns:M.GoodsReturn};
  let model=models[type],value=null;
  if(type==='money-links'&&req.body?.source){const row=await M.MoneyAssignment.findByPk(req.body.source);return {type,id:req.body.source,value:row?.toJSON()||null};}
  if(type==='orders'&&req.path.endsWith('/terms'))model=M.OrderTerms;

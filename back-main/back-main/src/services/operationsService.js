@@ -124,7 +124,7 @@ module.exports = {
         const payroll = ownPayroll;
         Object.assign(payrollExtra,{packagingRuns:await M.PackagingRun.findAll({where:{productionId:productions.map(p=>p.id)}})});
         const payrollAdvances = await Advance.findAll({where:{salaryId:payroll.map(s => s.id)},attributes:['id','salaryId','amount','payment_type','createdAt'],order:[['createdAt','DESC']]});
-        if (user.role === 'employee') return { ...payrollExtra,products, archivedProducts:await Product.findAll({where:{is_active:false,id:productions.map(p=>p.productId)},attributes:['id','name','weight']}), productions, payments, payroll, payrollAdvances, workers: workers.filter(w => w.id === user.id) };
+        if (user.role === 'employee') return { ...await require('./productionTasksService').visible(user),...payrollExtra,products, archivedProducts:await Product.findAll({where:{is_active:false,id:productions.map(p=>p.productId)},attributes:['id','name','weight']}), productions, payments, payroll, payrollAdvances, workers: workers.filter(w => w.id === user.id) };
         const [materials, receipts, recipes, users, receiptDocuments, incomes, outcomes] = await Promise.all([
             M.Material.findAll({ where:{active:true}, order: [['name', 'ASC']] }), M.Receipt.findAll({ order: [['createdAt', 'DESC']] }), M.Recipe.findAll({where:{active:true}}),
             User.findAll({ attributes: ['id', 'name', 'email', 'role'], order: [['name', 'ASC']] }),
@@ -147,7 +147,7 @@ module.exports = {
         trade.packagingVariants=await M.PackagingVariant.findAll();
         trade.supplierPrices=await M.SupplierPrice.findAll();
         trade.clientBonuses=await M.ClientBonus.findAll({order:[['date','DESC'],['createdAt','DESC']]});
-        return { ...require('./tradeFinanceService').extras(moneyData),...trade,...payrollExtra,products, archivedProducts:await Product.findAll({where:{is_active:false},attributes:['id','name','weight','priceForEmployee']}), archivedRecipes:await M.Recipe.findAll({where:{active:false}}), archivedMaterials:await M.Material.findAll({where:{active:false}}), orders, productions, payments, payroll, payrollAdvances, workers, materials, receipts, recipes, users: users.map(u => ({...u.get({plain:true}), disabled: Boolean(access.find(a => a.userId === u.id)?.disabled), company: profiles.find(p => p.userId === u.id)?.company || ''})), receiptDocuments, incomes:saleRows, outcomes };
+        return { ...require('./tradeFinanceService').extras(moneyData),...trade,...payrollExtra,products, archivedProducts:await Product.findAll({where:{is_active:false},attributes:['id','name','weight','priceForEmployee']}), archivedRecipes:await M.Recipe.findAll({where:{active:false}}), archivedMaterials:await M.Material.findAll({where:{active:false}}), orders, productions, payments, payroll, payrollAdvances, workers, materials, receipts, recipes, users: users.map(u => ({...u.get({plain:true}), disabled: Boolean(access.find(a => a.userId === u.id)?.disabled), productionOrders: Boolean(access.find(a => a.userId === u.id)?.productionOrders), company: profiles.find(p => p.userId === u.id)?.company || ''})), receiptDocuments, incomes:saleRows, outcomes };
     },
     async material(user, body) {
         admin(user);
@@ -640,14 +640,16 @@ module.exports = {
     },
     async access(user, id, b) {
         admin(user);
-        if (typeof b.disabled !== 'boolean') throw ApiError.badRequest('Укажите состояние доступа');
+        if (b.disabled !== undefined && typeof b.disabled !== 'boolean' || b.productionOrders !== undefined && typeof b.productionOrders !== 'boolean' || b.disabled === undefined && b.productionOrders === undefined) throw ApiError.badRequest('Укажите состояние доступа');
         return db.transaction(async t => {
             const target = required(await User.findByPk(id, {transaction:t, lock:t.LOCK.UPDATE}), 'Пользователь');
-            if(process.env.PUBLIC_DEMO==='true'&&['admin@demo.test','worker@demo.test','firm@demo.test'].includes(target.email))throw ApiError.forbiddenRequest('Доступ к общим демо-аккаунтам не изменяется');
+            if(process.env.PUBLIC_DEMO==='true'&&b.disabled!==undefined&&['admin@demo.test','worker@demo.test','firm@demo.test'].includes(target.email))throw ApiError.forbiddenRequest('Доступ к общим демо-аккаунтам не изменяется');
             if (target.role === 'super_admin' || target.id === user.id) throw ApiError.forbiddenRequest('Доступ администратора здесь не изменяется');
-            await M.Access.upsert({userId:target.id, disabled:b.disabled}, {transaction:t});
-            await Token.destroy({where:{userId:target.id}, transaction:t});
-            return {id:target.id, disabled:b.disabled};
+            if(b.productionOrders!==undefined&&target.role!=='employee')throw ApiError.badRequest('Задания доступны работникам производства');
+            const [access]=await M.Access.findOrCreate({where:{userId:target.id},transaction:t});
+            await access.update({...b.disabled!==undefined?{disabled:b.disabled}:{},...b.productionOrders!==undefined?{productionOrders:b.productionOrders}:{}},{transaction:t});
+            if(b.disabled!==undefined)await Token.destroy({where:{userId:target.id}, transaction:t});
+            return {id:target.id, disabled:access.disabled,productionOrders:access.productionOrders};
         });
     },
     async payment(user, b) {

@@ -24,6 +24,15 @@ const wrap = fn => async (req, res, next) => {
     } catch(e) { next(e); }
 };
 const attempts = new Map();
+router.use('/account', (req,res,next)=>{
+    const key='account:'+req.ip,now=Date.now();
+    if(attempts.size>1000)for(const [key,value]of attempts)if(value.until<now)attempts.delete(key);
+    let entry=attempts.get(key);if(!entry||entry.until<now)entry={count:0,until:now+60000};
+    attempts.set(key,entry);if(++entry.count>8)return res.status(429).json({message:'Слишком много попыток. Попробуйте через минуту'});next();
+});
+router.post('/account/reset',wrap(req=>require('../services/accountLinkService').request(req.body)));
+router.post('/account/complete',wrap(req=>require('../services/accountLinkService').complete(req.body)));
+router.get('/account/status',wrap(()=>({configured:require('../services/accountLinkService').configured()})));
 router.post('/session', wrap(async (req, res) => {
     if (process.env.LOCAL_DEMO !== 'true') throw ApiError.notFound();
     const key = req.ip, now = Date.now();
@@ -52,6 +61,8 @@ router.use(auth(), async (req, res, next) => {
     } catch (e) { next(e); }
 });
 router.get('/me', wrap(req => req.user));
+router.get('/account-email-status',wrap(async req=>{await require('../services/authorityService').owner(req.user);return {configured:require('../services/accountLinkService').configured()};}));
+router.post('/staff-invitations',wrap(req=>require('../services/accountLinkService').invite(req.user,req.body)));
 router.get('/staff-contacts/:id',wrap(req=>require('../services/staffContactService').read(req.user,req.params.id)));
 router.patch('/staff-contacts/:id',wrap(req=>require('../services/staffContactService').save(req.user,req.params.id,req.body)));
 const telegram = require('../services/telegramService');

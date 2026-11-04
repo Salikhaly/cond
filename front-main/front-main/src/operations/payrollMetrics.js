@@ -12,14 +12,14 @@ function monthlySalaryFor(data, workerId, month) {
     const employee = (data.workers || []).some(worker => Number(worker.id) === Number(workerId));
     if (!employee) return 0;
     const policy = (data.workPolicies || [])
-        .filter(row => Number(row.userId) === Number(workerId) && row.startsOn <= month + '-31' && row.mode === 'monthly')
+        .filter(row => Number(row.userId) === Number(workerId) && row.startsOn <= month + '-31')
         .sort((a, b) => String(b.startsOn).localeCompare(String(a.startsOn)))[0];
-    return policy ? Number(policy.monthlySalary || 0) : 0;
+    return policy?.mode==='monthly' ? Number(policy.monthlySalary || 0) : 0;
 }
 function payrollMetrics(data, workerId, month) {
     const salaries=(data.payroll || []).filter(s=>(!workerId || s.userId===Number(workerId)) && (!month || monthOf(s.date)===month));
     const monthlySalary = monthlySalaryFor(data, workerId, month);
-    const accrued=salaries.reduce((sum,s)=>sum+Number(s.total_amount),0)+monthlySalary,paid=salaries.reduce((sum,s)=>sum+Number(s.advanced_amount),0);
+    const accrued=salaries.reduce((sum,s)=>sum+Number(s.total_amount),0),paid=salaries.reduce((sum,s)=>sum+Number(s.advanced_amount),0);
     const productions=(data.productions||[]).filter(p=>p.status==='posted'&&(!workerId||p.workerId===Number(workerId))&&(!month||monthOf(p.date)===month));
     const paymentMonth=p=>p.salaryMonth||monthOf(p.date);
     const payments=(data.payments||[]).filter(p=>(!workerId||p.workerId===Number(workerId))&&(!month||paymentMonth(p)===month));

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Connection from './Connection';
+import AccountRecovery from './AccountRecovery';
 import PhoneQueue from './PhoneQueue';
 import { queued } from './offline';
 import { api, request, fmt } from './api';
@@ -56,10 +57,12 @@ function Login({ onLogin }) {
         <section className="op-login-card"><h2>Вход в COND</h2>
             <form onSubmit={submit}><Field label="Email" type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /><Field label="Пароль" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} />{codeSent && <Field label="Код из письма" inputMode="numeric" required value={code} onChange={e => setCode(e.target.value)} />}{error && <div className="op-alert error" role="alert">{error}</div>}<button disabled={busy}>{busy ? 'Входим…' : codeSent ? 'Подтвердить вход' : 'Войти'}</button></form>
 
+            <AccountRecovery/>
         </section></div>;
 }
-function MobileDock({tab,onSelect}) {
-    const actions = {
+function MobileDock({tab,onSelect,user,canViewProductionOrders}) {
+    const employeeActions=user?.role==='employee'?[['+ Выпуск',()=>onSelect('production',{kind:'add'})],...(canViewProductionOrders?[['Что готовить',()=>onSelect('production',{kind:'production-tasks'})]]:[]),['Моя зарплата',()=>onSelect('payroll')]]:null;
+    const actions = employeeActions || {
         overview: [['Расход', () => onSelect('expenses', { kind: 'add' })], ['Приход', () => onSelect('materials', 'receipt')], ['Выпуск', () => onSelect('production', 'add')]],
         materials: [['+ Приход', () => onSelect('materials', 'receipt')], ['История', () => onSelect('materials', { kind: 'history' })], ['Ревизия', () => onSelect('inventory')]],
         packaging: [['Товары', () => onSelect('catalog')], ['Приход', () => onSelect('materials', 'receipt')], ['Заявки', () => onSelect('orders')]],
@@ -83,6 +86,7 @@ function MobileDock({tab,onSelect}) {
 
 export default function Workspace() {
     const [user, setUser] = useState(null);
+    const [accountLink,setAccountLink]=useState(()=>new URLSearchParams(window.location.hash.slice(1)).has('account-token'));
     const [starting, setStarting] = useState(true);
     const [data, setData] = useState(null);
     const [tab, setTab] = useState('overview');
@@ -138,6 +142,7 @@ export default function Workspace() {
         catch (e) { setNotice({ error: true, text: e.message }); }
     }
     if (starting) return <div className="op-loading">Загружаем рабочее место…</div>;
+    if(accountLink)return <div className="op-login"><section className="op-login-card"><AccountRecovery onReturn={()=>setAccountLink(false)}/></section></div>;
     if (!user) return <Login onLogin={login} />;
     const permissions=data?.permissions||user.authority?.permissions||{};
     const map={materials:'materials',packaging:'catalog',catalog:'catalog',recipes:'catalog',production:'production',orders:'orders',returns:'orders',shops:'customers',suppliers:'suppliers',payroll:'payroll',finance:'finance',users:'users',expenses:'cash',directory:'catalog',history:'finance',inventory:'inventory'};
@@ -176,7 +181,7 @@ export default function Workspace() {
                 <footer className="op-footer">COND <span><button className="ghost" disabled={busy} onClick={() => run(async () => {}, 'Данные обновлены')}>Обновить</button></span></footer>
             </main>
         </div>
-        <MobileDock tab={allowedTab} onSelect={selectTab}/>
+        {!more&&<MobileDock tab={allowedTab} onSelect={selectTab} user={user} canViewProductionOrders={data?.canViewProductionOrders}/>}
     </div>;
 }
 

@@ -70,9 +70,9 @@ module.exports = async user => {
         for (const order of orders.filter(o => o.status === 'shipped')) {
             let total = 0;
             for (const line of order.lines) {
-                const link = links.find(l => l.id === `shipment:${order.id}:${line.productId}`);
+                const link = links.find(l => l.id === `shipment:${order.id}:${line.productId}:${line.packId||'kg'}`)||links.find(l => l.id === `shipment:${order.id}:${line.productId}`);
                 const income = link && incomes.find(i => i.id === link.data.incomeId);
-                if (!income || !(line.unit==='шт'?close(income.quantity,line.kg)&&close(income.totalWeight,0):close(income.totalWeight,line.kg)) || !close(income.totalAmount, Math.round(line.kg * line.price * 100) / 100, 0.011)) issues.push(`Заявка ${order.id.slice(0, 8)}: продажа не совпадает с отгрузкой`);
+                if (!income || !(line.unit==='шт'?close(income.quantity,line.kg)&&close(income.totalWeight,0):close(income.totalWeight,line.kg)) || !close(income.totalAmount, Math.round((line.packId?line.boxes:line.kg) * line.price * 100) / 100, 0.011)) issues.push(`Заявка ${order.id.slice(0, 8)}: продажа не совпадает с отгрузкой`);
                 total += Number(income?.totalAmount || 0);
             }
             if (!close(total, order.total, 0.011)) issues.push(`Заявка ${order.id.slice(0, 8)}: итог отличается от доходов`);

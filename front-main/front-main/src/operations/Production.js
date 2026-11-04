@@ -16,6 +16,7 @@ const boxWord = value => {
 
 export default function Production({ data, user, run, busy, initialAction, onNavigate }) {
     const admin = user.role === 'super_admin';
+    const [tasksOpen,setTasksOpen]=useState(false);
     const [adding, setAdding] = useState(!admin || initialAction === 'add' || ['add', 'record-production', 'day-production'].includes(initialAction?.kind));
     const [status, setStatus] = useState(admin ? 'draft' : 'all');
     const previewRef = useRef(null);
@@ -45,6 +46,7 @@ export default function Production({ data, user, run, busy, initialAction, onNav
 
     useEffect(() => { if (preview) previewRef.current?.scrollIntoView({ block: 'start' }); }, [preview]);
     useEffect(() => {
+        if(initialAction?.kind==='production-tasks'){setTasksOpen(true);setAdding(false);}
         if (initialAction?.kind === 'historical-production') { setStatus('posted'); setAdding(false); setDocumentId(''); }
         if (initialAction === 'add' || initialAction?.kind === 'add') { setAdding(true); setDocumentId(''); setPreview(null); setPreviewFor(null); }
         if (initialAction?.kind === 'day-production') {
@@ -100,10 +102,11 @@ export default function Production({ data, user, run, busy, initialAction, onNav
     };
 
     return <>
+        {!admin&&data.canViewProductionOrders&&<section className="op-card"><button type="button" className="secondary" aria-expanded={tasksOpen} onClick={()=>setTasksOpen(v=>!v)}>Что готовить · {(data.productionTasks||[]).filter(t=>t.toMake>0).length}</button>{tasksOpen&&<><h2>План по заявкам</h2>{!(data.productionTasks||[]).length&&<Empty>Нет заявок на производство</Empty>}{(data.productionTasks||[]).map(task=>{const product=data.products.find(p=>p.id===task.productId),pack=product?.packs?.find(p=>p.id===task.packId);return <article className="op-review-panel" key={task.key}><h3>{product?.name||'Товар'}{pack?' · '+fmt(pack.capacityKg)+' кг':''}</h3><p>{task.pendingOrders>0?'Есть заявки на согласовании · ':'Согласовано · '}К {task.deliveryDate} · Нужно {fmt(task.packId?task.boxes:task.kg)} {task.unit} · На складе {fmt(task.inStock)}</p><strong>{task.toMake>0?'Осталось изготовить '+fmt(task.toMake)+' '+task.unit:'Есть на складе'}</strong>{task.packId&&task.toMake>0&&<button type="button" disabled={busy} onClick={()=>{if(form.boxes&&(Number(form.productId)!==task.productId||form.packId!==task.packId)){setDraftTarget({...task,date:today()});return;}setForm(f=>({...f,productId:String(task.productId),packId:task.packId,boxes:String(task.toMake),date:today()}));setAdding(true);setTasksOpen(false);}}>Записать выпуск</button>}</article>;})}<p className="op-muted">Задания общие для цеха. Записывайте только свой фактический выпуск. Склад изменится после проверки администратором.</p></>}</section>}
         {documentId && <div className="op-plan-context">Акт выпуска · № {documentId.slice(0, 8).toUpperCase()}<button className="ghost" onClick={() => setDocumentId('')}>Показать все акты</button></div>}
         {previewLoading && <p className="op-plan-context" role="status">Проверяем расход и остатки…</p>}
         {intentError && <p className="op-missing" role="alert">{intentError}</p>}
-        {draftTarget && <div className="op-missing">Есть незаписанный выпуск другого товара. Сохраните его или откройте выбранный товар.<div className="op-actions"><button className="secondary" onClick={() => setDraftTarget(null)}>Продолжить черновик</button><button onClick={() => { setForm(f => ({ ...f, productId: String(draftTarget.productId || ''), packId: '', boxes: '', date: draftTarget.date || today(), workerId: draftTarget.workerId || f.workerId })); setDraftTarget(null); }}>Открыть выбранный товар</button></div></div>}
+        {draftTarget && <div className="op-missing">Есть незаписанный выпуск другого товара. Сохраните его или откройте выбранный товар.<div className="op-actions"><button className="secondary" onClick={() => setDraftTarget(null)}>Продолжить черновик</button><button onClick={() => { setForm(f => ({ ...f, productId: String(draftTarget.productId || ''), packId: draftTarget.packId || '', boxes: '', date: draftTarget.date || today(), workerId: draftTarget.workerId || f.workerId })); setDraftTarget(null); }}>Открыть выбранный товар</button></div></div>}
         {admin && <section className="op-card"><div className="op-section-heading"><h2>Производство коробками</h2><button onClick={() => setAdding(v => !v)}>{adding ? 'Закрыть форму' : '+ Записать выпуск'}</button></div><nav className="op-report-tabs op-order-tabs" aria-label="Производство">{[['draft', 'На проверке'], ['posted', 'Подтверждено'], ['all', 'Все записи']].map(([id, label]) => <button key={id} className={status === id ? 'active' : ''} aria-pressed={status === id} onClick={() => setStatus(id)}>{label}</button>)}</nav></section>}
         {adding && <section className="op-card">
             <h2>{admin ? 'Внести выработку сотрудника' : 'Сколько коробок вы изготовили?'}</h2>

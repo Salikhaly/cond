@@ -48,6 +48,9 @@ export async function request(path, body, method, operationId, sendingQueue=fals
         const error = new Error('Нет связи. Повторим, когда появится сеть.'); error.network = true; throw error;
     }
     if (response.status >= 500) {
+        if(path.startsWith('/operations/account/')||path==='/operations/staff-invitations'){
+            const data=await response.json().catch(()=>null);throw new Error(data?.message||'Отправка писем временно недоступна');
+        }
         if (verb === 'GET' && ['/operations/me', '/operations/dashboard','/operations/trade-finance'].includes(path)) { const data = await cached(path); return path.endsWith('/dashboard') ? projectDashboard(data) : data; }
         if (path === '/operations/preview') return offlineCalculation(body);
         const error = new Error('Сервер временно недоступен. Повторим отправку позже.'); error.network = true; throw error;

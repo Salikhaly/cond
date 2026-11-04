@@ -26,6 +26,13 @@ class MailService {
         })
     }
 
+    async sendAccountLink(to, link, kind) {
+        const invite=kind==='invite';
+        await this.transporter.sendMail({from:process.env.SMTP_FROM||process.env.SMTP_USER,to,
+            subject:invite?'COND — приглашение сотрудника':'COND — смена пароля',
+            text:(invite?'Вас пригласили в COND. Задайте пароль по ссылке (48 часов):':'Для смены пароля откройте ссылку (30 минут):')+'\n'+link+'\nЕсли вы не запрашивали письмо, проигнорируйте его.'});
+    }
+
 }
 
 module.exports = new MailService();
