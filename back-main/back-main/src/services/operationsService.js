@@ -308,8 +308,10 @@ module.exports = {
             const filmQtyM = b.filmQtyM == null || b.filmQtyM === '' ? 0 : num(b.filmQtyM, 'плёнка на коробку', true);
             const p = await Product.create({ name: text(b.name, 'название'), weight: capacity, priceForEmployee: rate, ingredients: [], additional: [], quantity: 0, weightTotal: 0, priceTotal: 0 }, { transaction: t });
             await M.Stock.create({ productId: p.id }, { transaction: t });
-            const basePrice = b.salePrice == null || b.salePrice === '' ? null : num(b.salePrice, 'цена за коробку', true);
-            const basePerKg = basePrice == null ? null : basePrice / capacity;
+            const basePerKg = b.pricePerKg != null && b.pricePerKg !== ''
+                ? num(b.pricePerKg, 'цена за кг', true)
+                : b.salePrice != null && b.salePrice !== '' ? num(b.salePrice, 'цена за коробку', true) / capacity : null;
+            if (basePerKg != null) await M.SellingPrice.upsert({ productId: p.id, price: money(basePerKg) }, { transaction: t });
             for (const variantCapacity of [2.5, 2, 1.1, 1.5]) {
                 let [box] = await M.Material.findOrCreate({ where: { name: 'Коробка ' + String(variantCapacity).replace('.', ',') + ' кг' }, defaults: { unit: 'шт', kind: 'box', capacityKg: variantCapacity, quantity: 0, unitCost: 0 }, transaction: t });
                 if (box.kind !== 'box') await box.update({ kind: 'box', capacityKg: variantCapacity, unit: 'шт' }, { transaction: t });

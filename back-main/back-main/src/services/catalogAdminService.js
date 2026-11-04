@@ -23,6 +23,9 @@ module.exports={
   }
   if(!p.is_active)throw ApiError.badRequest('Сначала восстановите товар из архива');
   const weight=number(b.weight),rate=number(b.priceForEmployee,true);
+  const pricePerKg = b.pricePerKg!==undefined
+   ? (b.pricePerKg===''||b.pricePerKg===null?null:number(b.pricePerKg,true))
+   : b.salePrice!==undefined ? (b.salePrice===''||b.salePrice===null?null:number(b.salePrice,true)/weight) : undefined;
   const variant=await M.PackagingVariant.findByPk(p.id,{transaction:t});
   const rateLocked=await M.Production.count({where:{productId:p.id,status:{[Op.in]:['draft','posted']}},transaction:t});
   if(rateLocked&&(rate!==Number(p.priceForEmployee)||variant&&b.packLaborPerPack!==undefined&&Number(b.packLaborPerPack)!==Number(variant.laborPerPack)))throw ApiError.badRequest('Оплата уже использованного товара меняется через согласованное правило сотрудника');
@@ -31,9 +34,12 @@ module.exports={
   await p.update({name:name(b.name),weight,priceForEmployee:rate,quantity:Math.floor((Number(p.weightTotal)+1e-8)/weight)},{transaction:t});
   const defaultPack=await M.ProductPack.findOne({where:{productId:p.id},order:[['capacityKg','ASC']],transaction:t});
   if(defaultPack){
-   const values={capacityKg:weight,laborPerBox:Math.round(rate*weight*100)/100};
-   if(b.salePrice!==undefined)values.salePrice=b.salePrice===''||b.salePrice===null?null:Math.round(number(b.salePrice,true)*100)/100;
-   await defaultPack.update(values,{transaction:t});
+   await defaultPack.update({capacityKg:weight,laborPerBox:Math.round(rate*weight*100)/100},{transaction:t});
+  }
+  if(pricePerKg!==undefined&&pricePerKg!==null){
+   await M.SellingPrice.upsert({productId:p.id,price:Math.round(pricePerKg*100)/100},{transaction:t});
+   const packs=await M.ProductPack.findAll({where:{productId:p.id},transaction:t});
+   for(const pack of packs)await pack.update({salePrice:Math.round(pricePerKg*Number(pack.capacityKg)*100)/100},{transaction:t});
   }
   if(b.filmQtyM!==undefined){
    const filmQty=b.filmQtyM===''||b.filmQtyM===null?0:number(b.filmQtyM,true);
