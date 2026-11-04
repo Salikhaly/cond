@@ -35,6 +35,10 @@ module.exports={
    if(b.salePrice!==undefined)values.salePrice=b.salePrice===''||b.salePrice===null?null:Math.round(number(b.salePrice,true)*100)/100;
    await defaultPack.update(values,{transaction:t});
   }
+  if(b.filmQtyM!==undefined){
+   const filmQty=b.filmQtyM===''||b.filmQtyM===null?0:number(b.filmQtyM,true);
+   await M.ProductPack.update({filmQtyM:filmQty},{where:{productId:p.id},transaction:t});
+  }
   if(await M.Recipe.findOne({where:{productId:p.id,active:true},transaction:t})){
    const calc=await require('./operationsService').calculate(p.id,Number((await M.Recipe.findOne({where:{productId:p.id},transaction:t})).outputKg),t);
    await p.update({priceTotal:Math.round((calc.costPerKg+Number.EPSILON)*100)/100},{transaction:t});
