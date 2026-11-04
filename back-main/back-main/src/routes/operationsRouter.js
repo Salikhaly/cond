@@ -136,6 +136,7 @@ router.patch('/expenses/:id/classification',wrap(req=>require('../services/expen
 router.post('/expenses/:id/reverse',wrap(req=>require('../services/expenseService').reverse(req.user,req.params.id,req.body)));
 router.post('/products', wrap(req => service.product(req.user, req.body)));
 router.post('/product-packs', wrap(req => service.createPack(req.user, req.body)));
+router.post('/products/packs/ensure-all', wrap(req => service.ensureAllBasePacks(req.user)));
 router.post('/products/:id/packs/ensure', wrap(req => service.ensureBasePacks(req.user, req.params.id)));
 router.patch('/product-packs/:id', wrap(req => service.updatePack(req.user, req.params.id, req.body)));
 router.post('/packaging/variants',wrap(req=>require('../services/packagingService').create(req.user,req.body)));

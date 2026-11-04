@@ -289,6 +289,16 @@ module.exports = {
             return { productId: product.id, created };
         });
     },
+    async ensureAllBasePacks(user) {
+        admin(user);
+        const products = await Product.findAll({ where: { is_active: true }, order: [['id', 'ASC']] });
+        let created = 0, changed = 0;
+        for (const product of products) {
+            const result = await this.ensureBasePacks(user, product.id);
+            if (result.created) { created += result.created; changed += 1; }
+        }
+        return { products: products.length, changed, created };
+    },
     async updatePack(user, id, b) {
         admin(user);
         const pack = required(await M.ProductPack.findByPk(id), 'Тип коробки');
