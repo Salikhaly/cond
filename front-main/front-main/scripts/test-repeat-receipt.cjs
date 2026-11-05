@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-const {repeatReceipt}=require('../src/operations/repeatReceipt');
+const {repeatReceipt,replaceReceiptMaterial,newestReceipts}=require('../src/operations/repeatReceipt');
 const doc={id:'old',supplier:'Поставщик',document:'OLD-1',date:'2025-02-01',paid:true,initialPayment:{amount:1000},additionalAmount:500,serverDraftId:'old',lines:[{materialId:'flour',quantity:10,unitCost:110,purchaseUnitCost:100},{materialId:'box',purchasePack:{count:2,size:20,pricePerUnit:0,unit:'коробка'}}]};
 const copy=JSON.stringify(doc),r=repeatReceipt(doc,[{id:'flour'}],'2026-11-05');
 assert.equal(r.date,'2026-11-05');assert.equal(r.document,'');assert.equal(r.paid,false);assert.equal(r.id,undefined);assert.equal(r.initialPayment,undefined);assert.equal(r.serverDraftId,undefined);assert.equal(r.additionalAmount,undefined);
@@ -7,4 +7,13 @@ assert.equal(r.lines[0].unitCost,100);assert.equal(r.lines[0].quantity,10);asser
 assert.equal(JSON.stringify(doc),copy);
 const legacy=repeatReceipt({supplier:'A',lines:[{materialId:'x',quantity:null,unitCost:null},{materialId:'p',purchasePack:{count:1,size:10,price:500}}]},[],'2026-11-05');
 assert.equal(legacy.lines[0].quantity,'');assert.equal(legacy.lines[0].unitCost,'');assert.equal(legacy.lines[1].packUnitPrice,'50');
-console.log('17 repeat receipt assertions passed');
+const original={materialId:'old',quantity:'4.5',unitCost:'200',shortageReason:'Бой'};
+const replacement=replaceReceiptMaterial(original,{unit:'кг'},{id:'new',unit:'кг'});
+assert.deepEqual(replacement,{materialId:'new',quantity:'4.5',unitCost:''});
+assert.equal(original.unitCost,'200');
+assert.deepEqual(replaceReceiptMaterial(original,{unit:'кг'},{id:'new',unit:'л'}),{materialId:'new',quantity:'',unitCost:''});
+assert.deepEqual(replaceReceiptMaterial(original,undefined,{id:'new',unit:'кг'}),{materialId:'new',quantity:'',unitCost:''});
+const packed=replaceReceiptMaterial({materialId:'old',inPacks:true,packCount:3,packSize:20,packUnitPrice:100,shortageReason:'Бой'},{unit:'шт'},{id:'new',unit:'шт'});
+assert.equal(packed.packCount,3);assert.equal(packed.packSize,20);assert.equal(packed.packUnitPrice,'');assert.equal(packed.shortageReason,undefined);
+const history=[{id:'old',date:'2026-11-05',createdAt:'2026-11-05T09:00:00Z'},{id:'new',date:'2026-11-05',createdAt:'2026-11-05T10:00:00Z'},{id:'yesterday',date:'2026-11-04',createdAt:'2026-11-05T11:00:00Z'}];assert.deepEqual(newestReceipts(history).map(r=>r.id),['new','old','yesterday']);assert.equal(history[0].id,'old');
+console.log('Repeat and replacement receipt checks passed');

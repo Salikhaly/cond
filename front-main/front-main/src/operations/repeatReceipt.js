@@ -8,4 +8,12 @@ function repeatReceipt(receipt,materials,date){
   return {materialId:l.materialId,quantity:l.quantity??'',unitCost:l.purchaseUnitCost??l.unitCost??''};
  })};
 }
-module.exports={repeatReceipt};
+// A replacement never borrows the old material price or changes units silently.
+function replaceReceiptMaterial(line,previous,material){
+ const base={materialId:material.id,quantity:'',unitCost:''};
+ if(!previous||previous.unit!==material.unit)return base;
+ if(line.inPacks)return {...base,inPacks:true,packCount:line.packCount??'',packSize:line.packSize??'',packUnit:line.packUnit||material.packUnit||'коробка',packUnitPrice:''};
+ return {...base,quantity:line.quantity??''};
+}
+function newestReceipts(rows){return [...rows].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt||'').localeCompare(String(a.createdAt||''))||String(b.id||'').localeCompare(String(a.id||'')));}
+module.exports={repeatReceipt,replaceReceiptMaterial,newestReceipts};
