@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
+import {readCache,writeCache} from './offline';
 export function photoSource(p) {
   if (/^data:image\/(jpeg|png|webp);base64,/.test(p.photo || '')) return p.photo;
   if(/^\/products\/[a-z0-9_.-]+\.(png|jpg|webp)$/i.test(p.image||''))return p.image;
@@ -9,8 +10,11 @@ export default function ProductPhoto({
   product,
   onOpen
 }) {
-  const source = photoSource(product),
-    [failed, setFailed] = useState('');
+  const [remote,setRemote]=useState(''),[failed,setFailed]=useState('');
+  useEffect(()=>{setRemote('');if(!product.photoUrl)return;let active=true,url;const controller=new AbortController(),key=localStorage.getItem('cond-owner')+':product-image:'+product.id+':'+product.photoVersion;
+    const show=blob=>{if(active&&blob instanceof Blob){url=URL.createObjectURL(blob);setRemote(url);}};
+    fetch(product.photoUrl+'&size=thumb',{headers:{Authorization:'Bearer '+(localStorage.getItem('token')||'')},signal:controller.signal}).then(async r=>{if(!r.ok)throw Error('Фото недоступно');const blob=await r.blob();writeCache(key,blob).catch(()=>{});return blob;}).then(show).catch(()=>{if(active)readCache(key).then(show).catch(()=>{});});return()=>{active=false;controller.abort();if(url)URL.revokeObjectURL(url);};},[product.photoUrl]);
+  const source=product.photo?photoSource(product):remote||(!product.hasPhoto?photoSource(product):'');
   return <div className="op-photo-wrap">{source && failed !== source ? <img src={source} alt={product.name} loading="lazy" onError={() => setFailed(source)} /> : <div className="op-photo-placeholder"><span aria-hidden="true">◈</span><small>Фото пока не добавлено</small></div>}{onOpen && <button className="op-photo-open" type="button" aria-label={'Открыть ' + product.name} onClick={onOpen}>Посмотреть</button>}</div>;
 }
 export async function preparePhoto(file) {

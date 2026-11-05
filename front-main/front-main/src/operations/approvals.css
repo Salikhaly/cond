@@ -323,42 +323,6 @@
     color: var(--approval-accent);
 }
 
-.op-app .cond-quick-actions {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 10px !important;
-}
-
-.op-app .cond-quick-actions button {
-    border: 0 !important;
-    border-radius: 20px !important;
-    background: #fff !important;
-    box-shadow: none !important;
-}
-
-.op-app .cond-quick-actions button:nth-child(1) > span {
-    background: var(--ds-accent-soft) !important;
-    color: var(--ds-accent) !important;
-    box-shadow: none !important;
-}
-
-.op-app .cond-quick-actions button:nth-child(2) > span {
-    background: var(--ds-blue-soft) !important;
-    color: var(--ds-blue) !important;
-    box-shadow: none !important;
-}
-
-.op-app .cond-quick-actions button:nth-child(3) > span {
-    background: var(--ds-orange-soft) !important;
-    color: var(--ds-orange) !important;
-    box-shadow: none !important;
-}
-
-.op-app .cond-quick-actions button:nth-child(4) > span {
-    background: var(--ds-purple-soft) !important;
-    color: var(--ds-purple) !important;
-    box-shadow: none !important;
-}
-
 .op-app .op-snapshot .ghost,
 .op-app .op-stock-summary .ghost {
     color: var(--ds-blue) !important;
@@ -376,12 +340,6 @@
 .op-app .cond-profile-button {
     background: var(--ds-purple-soft) !important;
     color: var(--ds-purple) !important;
-}
-
-.op-app .cond-quick-actions b {
-    font-size: 12px !important;
-    font-weight: 600 !important;
-    color: var(--approval-ink) !important;
 }
 
 .op-infographics {
@@ -525,16 +483,6 @@
         border-radius: 24px 24px 0 0;
         padding-left: 16px;
         padding-right: 16px;
-    }
-    .op-app .cond-quick-actions {
-        gap: 8px !important;
-    }
-    .op-app .cond-quick-actions button {
-        padding: 15px 4px !important;
-    }
-    .op-app .cond-quick-actions button > span {
-        width: 40px;
-        height: 40px;
     }
     .op-approval-strip {
         padding: 13px 14px;

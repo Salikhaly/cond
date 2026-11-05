@@ -42,3 +42,5 @@ module.exports = async (req, action) => {
         });
     });
 };
+
+module.exports.transaction=async action=>{const current=context.getStore();return current?action(current):transaction(t=>context.run(t,()=>action(t)));};

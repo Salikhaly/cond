@@ -1,6 +1,6 @@
 const personalDocuments=rows=>rows.filter(r=>r.kind==='withdrawal'||r.reversalOf&&rows.some(o=>o.id===r.reversalOf&&o.kind==='withdrawal')).map(r=>({id:r.id,date:r.date,amount:r.kind==='withdrawal'?Number(r.amount):-Number(r.amount),name:r.reason}));
 const db = require('../database/sequelize');
-const { Op } = require('sequelize');
+const { Op,literal } = require('sequelize');
 const { User, Token, Product, Salary, Income, BusinessRelation, Outcome, OutcomeCategory, Advance, Report, ReportProducts } = require('../models/models');
 const M = require('../models/operations');
 const ApiError = require('../exceptions/ApiError');
@@ -25,7 +25,7 @@ async function catalog(user) {
     // Initialize only missing balances; existing production balances are never overwritten.
     for (const p of products) await M.Stock.findOrCreate({ where: { productId: p.id }, defaults: { kg: Number(p.weightTotal) } });
     const stocks = await M.Stock.findAll();
-    const displays=await M.ProductDisplay.findAll();
+    const displays=await M.ProductDisplay.findAll({attributes:['productId','description','photoVersion','catalogGroup','sortOrder','catalogVisible',[literal("length(COALESCE(photo,'')) > 0"),'hasPhoto']],raw:true});
     const stockCounts=await M.StockCount.findAll({where:{status:'posted'},attributes:['lines']});
     const sellingPrices=await M.SellingPrice.findAll();
     const variants=await M.PackagingVariant.findAll();
@@ -52,7 +52,7 @@ async function catalog(user) {
         }
         const s = stocks.find(s => s.productId === p.id);
         const display=displays.find(d=>d.productId===p.id);
-        const common = {stockVerified:p.additional?.stockVerified!==false||stockCounts.some(c=>c.lines.some(l=>l.kind==='product'&&Number(l.itemId)===p.id)), packKg,packs:packView(p),salePrice:sellingPrices.find(x=>x.productId===p.id)?.price ?? null,id: p.id, name: p.name, weight: p.weight, photo:display?.photo || '', description:display?.description || '', image:p.image || '', availableKg: round(Number(s.kg) - Number(s.reservedKg)) };
+        const common = {stockVerified:p.additional?.stockVerified!==false||stockCounts.some(c=>c.lines.some(l=>l.kind==='product'&&Number(l.itemId)===p.id)), packKg,packs:packView(p),salePrice:sellingPrices.find(x=>x.productId===p.id)?.price ?? null,id: p.id, name: p.name, weight: p.weight, photo:'',hasPhoto:Boolean(display?.hasPhoto),photoVersion:Number(display?.photoVersion||0),photoUrl:display?.hasPhoto?'/api/operations/products/'+p.id+'/photo?v='+Number(display.photoVersion||0):'',catalogGroup:display?.catalogGroup||'',catalogVisible:display?.catalogVisible===true,sortOrder:Number(display?.sortOrder||0), description:display?.description || '', image:p.image || '', availableKg: round(Number(s.kg) - Number(s.reservedKg)) };
         if (user.role === 'representative') return common;
         return { ...common,wageRateLocked:used.some(x=>x.productId===p.id), packLaborPerPack:variants.find(v=>v.productId===p.id)?.laborPerPack??null,kg: s.kg, reservedKg: s.reservedKg, priceForEmployee: p.priceForEmployee };
     });
@@ -505,14 +505,7 @@ module.exports = {
                     const boxes=num(raw.boxes,'количество коробок');
                     if(Math.abs(boxes-Math.round(boxes))>1e-7)throw ApiError.badRequest('Коробки — целое число');
                     let price=pack.salePrice==null?null:Number(pack.salePrice);
-                    if(target){
-                        const client=await M.ClientPrice.findOne({where:{productId:product.id,packId:pack.id,customerId:target.customer.id,startsOn:{[Op.lte]:date(b.deliveryDate)}},order:[['startsOn','DESC'],['revision','DESC']],transaction:t});
-                        if(client?.price!=null)price=Number(client.price);
-                        else {
-                            const perKg=await require('./tradeFinanceService').quote(target.customer.id,target.outlet.id,product.id,date(b.deliveryDate),t);
-                            if(perKg!=null)price=money(Number(perKg)*Number(pack.capacityKg));
-                        }
-                    }
+                    if(target)price=await require('./tradeFinanceService').quotePack(target.customer.id,target.outlet.id,pack,date(b.deliveryDate),t);
                     const capacityText = String(Number(pack.capacityKg)).replace('.', ',');
                     lines.push({productId,packId:pack.id,boxes,capacityKg:Number(pack.capacityKg),kg:round(boxes*Number(pack.capacityKg)),name:product.name+' · '+capacityText+' кг',boxName:capacityText+' кг',price:price==null?null:money(price)});
                 } else {
@@ -525,7 +518,8 @@ module.exports = {
             if(new Set(lines.map(l=>String(l.productId)+':'+String(l.packId||'kg'))).size!==lines.length)throw ApiError.badRequest('Товар или коробка повторяется');
             const amount=l=>l.packId?money(Number(l.boxes)*Number(l.price)):money(Number(l.kg)*Number(l.price));
             const o=await M.Order.create({userId:target?target.outlet.representativeId:user.id,company,lines,total:lines.some(l=>l.price==null)?0:money(lines.reduce((n,l)=>n+amount(l),0)),note:String(b.note||'').slice(0,2000),deliveryDate:date(b.deliveryDate)},{transaction:t});
-            if(target)await M.Destination.create({orderId:o.id,outletId:target.outlet.id,customerId:target.customer.id,customerName:target.customer.name,outletName:target.outlet.name,address:target.outlet.address,contact:target.outlet.contact,phone:target.outlet.phone,representativeName:user.name},{transaction:t});
+            const assigned=target?await User.findByPk(target.outlet.representativeId,{attributes:['name'],transaction:t}):null;
+            if(target)await M.Destination.create({orderId:o.id,outletId:target.outlet.id,customerId:target.customer.id,customerName:target.customer.name,outletName:target.outlet.name,address:target.outlet.address,contact:target.outlet.contact,phone:target.outlet.phone,representativeName:assigned?.name||user.name},{transaction:t});
             await require('./telegramService').orderCreated(o,target,user,t);
             return o;
         });
@@ -686,7 +680,7 @@ module.exports = {
     async advance(user, b) {
         admin(user);
         const month=b.salaryMonth||((typeof b.date==='string'&&/^\d{4}-\d{2}/.test(b.date))?b.date.slice(0,7):undefined);
-        return module.exports.payment(user,{...b,kind:'advance',allowOverAdvance:b.allowOverAdvance!==false,...(month?{salaryMonth:month}:{})});
+        return module.exports.payment(user,{...b,kind:'advance',allowOverAdvance:b.allowOverAdvance===true,...(month?{salaryMonth:month}:{})});
     },
     async exchange(user) {
         admin(user);

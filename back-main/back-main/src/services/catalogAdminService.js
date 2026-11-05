@@ -22,7 +22,7 @@ module.exports={
    return p.update({is_active:b.active},{transaction:t});
   }
   if(!p.is_active)throw ApiError.badRequest('Сначала восстановите товар из архива');
-  const weight=number(b.weight),rate=number(b.priceForEmployee,true);
+  const weight=number(b.weight),rate=number(b.priceForEmployee,true),previousRate=Number(p.priceForEmployee);
   const pricePerKg = b.pricePerKg!==undefined
    ? (b.pricePerKg===''||b.pricePerKg===null?null:number(b.pricePerKg,true))
    : b.salePrice!==undefined ? (b.salePrice===''||b.salePrice===null?null:number(b.salePrice,true)/weight) : undefined;
@@ -32,10 +32,7 @@ module.exports={
   if(variant&&Math.abs(weight-Number(variant.kgPerPack))>.00001)throw ApiError.badRequest('Для другого веса создайте отдельный вариант фасовки. Вес существующего варианта сохраняется');
   if(variant&&b.packLaborPerPack!==undefined)await variant.update({laborPerPack:number(b.packLaborPerPack,true)},{transaction:t});
   await p.update({name:name(b.name),weight,priceForEmployee:rate,quantity:Math.floor((Number(p.weightTotal)+1e-8)/weight)},{transaction:t});
-  const defaultPack=await M.ProductPack.findOne({where:{productId:p.id},order:[['capacityKg','ASC']],transaction:t});
-  if(defaultPack){
-   await defaultPack.update({capacityKg:weight,laborPerBox:Math.round(rate*weight*100)/100},{transaction:t});
-  }
+  if(rate!==previousRate)for(const pack of await M.ProductPack.findAll({where:{productId:p.id},transaction:t}))await pack.update({laborPerBox:Math.round(rate*Number(pack.capacityKg)*100)/100},{transaction:t});
   if(pricePerKg!==undefined&&pricePerKg!==null){
    await M.SellingPrice.upsert({productId:p.id,price:Math.round(pricePerKg*100)/100},{transaction:t});
    const packs=await M.ProductPack.findAll({where:{productId:p.id},transaction:t});

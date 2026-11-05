@@ -44,7 +44,10 @@ module.exports = async ({ call, check, admin, worker, dash, d, product }) => {
     const posted = await call(admin, '/operations/productions/' + production.id + '/post', {});
     check(Number(posted.laborCost) === 100 && Number(posted.snapshot.ratePerKg) === 200, 'Individual rate applies to a new production and is saved in its snapshot');
 
-    const advance = await call(admin, '/operations/advances', { workerId, amount: 500, date: d, method: 'cash', note: 'Тестовый аванс' });
+    const paymentsBefore=(await dash()).payments.length;
+    await call(admin,'/operations/advances',{workerId,amount:500,date:d,method:'cash'},'POST',400);
+    check((await dash()).payments.length===paymentsBefore,'Excess advance without explicit confirmation leaves payments unchanged');
+    const advance = await call(admin, '/operations/advances', { workerId, amount: 500, date: d, method: 'cash', note: 'Тестовый аванс', allowOverAdvance:true });
     check(advance.kind === 'advance' && advance.salaryMonth === d.slice(0, 7), 'Advance is stored as a separate payment kind for the salary month');
     current = await dash();
     const payment = current.payments.find(p => p.id === advance.id);

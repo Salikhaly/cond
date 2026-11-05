@@ -99,7 +99,8 @@ module.exports = {
                     for (const file of files) compilation.emitAsset(file, new compiler.webpack.sources.RawSource(require('fs').readFileSync(path.join(__dirname, 'public', file))));
                 });
                 compilation.hooks.processAssets.tap({ name: 'CondOfflineShell', stage: compiler.webpack.Compilation.PROCESS_ASSETS_STAGE_SUMMARIZE }, () => {
-                    const assets = Object.keys(compilation.assets).filter(n => /\.(html|js|css|svg|png|jpe?g|webmanifest)$/.test(n)).map(n => '/' + n);
+                    const optionalPhotos = new Set([...compilation.chunks].filter(chunk => [...compilation.chunkGraph.getChunkModulesIterable(chunk)].some(module => String(module.resource||'').replace(/\\/g,'/').includes('/heic2any/'))).flatMap(chunk => [...chunk.files]));
+                    const assets = Object.keys(compilation.assets).filter(n => !optionalPhotos.has(n) && /\.(html|js|css|svg|png|jpe?g|webmanifest)$/.test(n)).map(n => '/' + n);
                     const template = require('fs').readFileSync(path.join(__dirname, 'public/sw.js'), 'utf8');
                     const hash = require('crypto').createHash('sha256').update(template+assets.map(n => compilation.assets[n.slice(1)].source()).join('')).digest('hex').slice(0, 16);
                     const source = template.replace('__BUILD__', hash).replace('__ASSETS__', JSON.stringify(assets));

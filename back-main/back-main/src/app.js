@@ -29,6 +29,7 @@ app.use(cookieParser());
 app.use('/api/sync', require('./routes/syncRouter'));
 app.use(express.json({ limit: '1mb' }));
 app.get('/api/health', async (req, res) => { try { await db.query('SELECT 1'); res.json({ status:'ok', ...(process.env.PUBLIC_DEMO==='true'?{publicDemo:true}:{}), ...(process.env.PRESENTATION_MODE==='true'?{presentation:true,presentationDate:process.env.DB_NAME.slice(-8)}:{}) }); } catch { res.status(503).json({status:'unavailable'}); } });
+app.use('/api/storefront',require('./routes/storeCatalogRouter'));
 app.use('/api/operations', require('./routes/operationsRouter'));
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 // Old screens remain available for history. All new inventory/payroll writes

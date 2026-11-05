@@ -30,7 +30,7 @@ export async function request(path, body, method, operationId, sendingQueue=fals
         const row = await enqueue(path, body, verb,operationId);
         await flushQueue();
         const pending = (await queued()).find(r => r.id === row.id);
-        if (pending?.error) throw new Error(pending.error + '. Запись сохранена в очереди телефона.');
+        if(pending?.error){const error=new Error(pending.error+'. Запись сохранена в очереди телефона.');error.queued=true;throw error;}
         if(!pending){const actual=await readCache(localStorage.getItem('cond-owner')+':result:'+row.id);if(actual)return actual;}
         if(operationId&&pending){const e=new Error('Запись сохранена на телефоне. Сервер ещё не подтвердил её. Отправка повторится с тем же номером, без дубликата.');e.network=true;throw e;}
         return { pending: Boolean(pending), id: row.id };
@@ -45,7 +45,7 @@ export async function request(path, body, method, operationId, sendingQueue=fals
     catch (e) {
         if (verb === 'GET' && ['/operations/me', '/operations/dashboard','/operations/trade-finance'].includes(path)) { const data = await cached(path); return path.endsWith('/dashboard') ? projectDashboard(data) : data; }
         if (path === '/operations/preview') return offlineCalculation(body);
-        const error = new Error('Нет связи. Повторим, когда появится сеть.'); error.network = true; throw error;
+        const error = new Error('Нет связи. Проверьте подключение и повторите.'); error.network = true; throw error;
     }
     if (response.status >= 500) {
         if(path.startsWith('/operations/account/')||path==='/operations/staff-invitations'){
@@ -53,7 +53,7 @@ export async function request(path, body, method, operationId, sendingQueue=fals
         }
         if (verb === 'GET' && ['/operations/me', '/operations/dashboard','/operations/trade-finance'].includes(path)) { const data = await cached(path); return path.endsWith('/dashboard') ? projectDashboard(data) : data; }
         if (path === '/operations/preview') return offlineCalculation(body);
-        const error = new Error('Сервер временно недоступен. Повторим отправку позже.'); error.network = true; throw error;
+        const error = new Error('Сервер временно недоступен. Повторите чуть позже.'); error.network = true; throw error;
     }
     if (response.status === 401 && !['/operations/session', '/auth/login', '/auth/activate'].includes(path)) {
         if (!refreshing) refreshing = fetch('/api/auth/refresh', { credentials: 'include', signal:AbortSignal.timeout(8000) }).then(async r => {

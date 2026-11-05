@@ -46,7 +46,7 @@ async function authorize(req){
  const a=req.user.authority||await access(req.user);if(a.owner)return;const p=a.permissions,path=req.path,write=!['GET','HEAD'].includes(req.method),segment=path.split('/')[1];
  if(['account-email-status','staff-invitations','audit','exchange','authority','money','money-accounts','money-documents','money-links'].includes(segment))throw ApiError.forbiddenRequest('Раздел доступен владельцу');
  if(segment==='sync'&&write)throw ApiError.forbiddenRequest('Отправку копии запускает владелец');
- let permission={'expense-articles':'catalog','staff-contacts':'payroll',products:'catalog',recipes:'catalog',packaging:'catalog',materials:'materials',receipts:'materials','receipt-drafts':'materials','stock-counts':'inventory',orders:'orders',returns:'orders','return-credits':'cash',outlets:'customers','client-prices':'customers',suppliers:'suppliers','trade-finance':'finance',expenses:'cash',payments:'payroll','representative-payroll':'payroll',users:'users',telegram:'settings',reconciliation:'settings',preview:'production',productions:'production',cash:'cash','work-days':'payroll','work-profiles':'payroll','work-recalculate':'payroll'}[segment];
+ let permission={'expense-articles':'catalog','staff-contacts':'payroll',products:'catalog',recipes:'catalog',packaging:'catalog',materials:'materials',receipts:'materials','receipt-drafts':'materials','stock-counts':'inventory',orders:'orders',returns:'orders','return-credits':'cash',outlets:'customers','client-prices':'customers',suppliers:'suppliers','trade-finance':'finance',expenses:'cash',advances:'payroll',payments:'payroll','representative-payroll':'payroll',users:'users',telegram:'settings',reconciliation:'settings',preview:'production',productions:'production',cash:'cash','work-days':'payroll','work-profiles':'payroll','work-recalculate':'payroll'}[segment];
  if(segment==='wage-requests'){
   const request=req.path.split('/')[2]?await M.WageRequest.findByPk(req.path.split('/')[2]):null,type=request?.type||req.body?.type;
   if(!type&&req.method==='GET'){if(!p.production&&!p.payroll)throw ApiError.forbiddenRequest();permission='requestsRead';}
@@ -55,7 +55,7 @@ async function authorize(req){
  if(!permission&&!['me','dashboard','sync'].includes(segment))throw ApiError.forbiddenRequest('Раздел не разрешён владельцем');
  if(permission&&permission!=='requestsRead'&&!p[permission])throw ApiError.forbiddenRequest('Владелец не разрешил этот раздел');
  if(write&&path.match(/^\/expenses\/[^/]+\/(classification|reverse)$/)&&!p.adjustFinance)throw ApiError.forbiddenRequest('Исправление финансовых записей разрешает владелец');
- if(write&&(segment==='cash'||segment==='payments'||segment==='return-credits'||path.endsWith('/settle')||path.match(/^\/receipts\/[^/]+\/pay$/))&&!p.cash)throw ApiError.forbiddenRequest('Не разрешена запись денежных выплат');
+ if(write&&(segment==='cash'||segment==='payments'||segment==='advances'||segment==='return-credits'||path.endsWith('/settle')||path.match(/^\/receipts\/[^/]+\/pay$/))&&!p.cash)throw ApiError.forbiddenRequest('Не разрешена запись денежных выплат');
  if(segment==='cash'&&!p.finance)throw ApiError.forbiddenRequest('Финансовый журнал закрыт');
  let effectiveDate=req.body?.date||req.body?.payload?.date;
  let approvedPastOutput=false;

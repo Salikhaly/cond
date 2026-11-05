@@ -133,10 +133,14 @@ router.get('/reconciliation', wrap(req => {
 }));
 const trade=require('../services/tradeService');
 router.post('/outlets',wrap(req=>trade.outlet(req.user,req.body)));
+router.get('/outlets/:id/catalog-link',wrap(req=>require('../services/storeCatalogService').status(req.user,req.params.id)));
+router.post('/outlets/:id/catalog-link',async(req,res,next)=>{try{if(!req.headers['x-operation-id'])throw ApiError.badRequest('Не удалось сохранить номер операции');res.json(await require('../services/storeCatalogService').issue(req.user,req.params.id,req.headers['x-operation-id']));}catch(e){next(e);}});
+router.post('/outlets/:id/catalog-link/revoke',wrap(req=>require('../services/storeCatalogService').revoke(req.user,req.params.id)));
 router.patch('/outlets/:id',wrap(req=>trade.assign(req.user,req.params.id,req.body)));
 router.patch('/outlets/:id/details',wrap(req=>trade.editOutlet(req.user,req.params.id,req.body)));
 router.patch('/customers/:id',wrap(req=>trade.editCustomer(req.user,req.params.id,req.body)));
-router.patch('/products/:id/display',wrap(req=>trade.display(req.user,req.params.id,req.body)));
+router.patch('/products/:id/display',wrap(async req=>{const c=await trade.display(req.user,req.params.id,req.body);return {productId:c.productId,photoVersion:c.photoVersion,hasPhoto:Boolean(c.photo),description:c.description,catalogGroup:c.catalogGroup,catalogVisible:c.catalogVisible,sortOrder:c.sortOrder};}));
+router.get('/products/:id/photo',async(req,res,next)=>{try{const media=await require('../services/productDisplayService').media(req.params.id,req.query.size);res.type(media.type).send(media.bytes);}catch(e){next(e);}});
 router.post('/materials', wrap(req => service.material(req.user, req.body)));
 router.post('/receipts', wrap(req => service.receipt(req.user, req.body)));
 router.post('/receipt-drafts',wrap(req=>require('../services/receiptDraftService').create(req.user,req.body)));

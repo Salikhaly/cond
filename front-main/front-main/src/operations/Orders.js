@@ -1,3 +1,5 @@
+import {boxWord} from './boxWord';
+import {priceForPack} from '../../../../back-main/back-main/src/domain/catalogPrice';
 import OrderProductCard from './OrderProductCard';
 import NumericInput from './SafeNumericInput';
 import {groupSalesCatalog} from './salesCatalog';
@@ -10,14 +12,6 @@ import ProductPhoto from './ProductPhoto';
 import { InvoiceBatch } from './PrintDocuments';
 
 const money = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
-const boxWord = value => {
-    const n = Math.abs(Number(value) || 0) % 100;
-    const n1 = n % 10;
-    if (n > 10 && n < 20) return 'коробок';
-    if (n1 === 1) return 'коробка';
-    if (n1 >= 2 && n1 <= 4) return 'коробки';
-    return 'коробок';
-};
 const lineTotal = l => l.packId ? money(Number(l.boxes) * Number(l.price)) : money(Number(l.kg) * Number(l.price));
 const lineQuantity = l => l.packId ? `${fmt(l.boxes)} ${boxWord(l.boxes)}` : `${fmt(l.kg)} кг`;
 
@@ -97,12 +91,7 @@ export default function Orders({ data, user, run, busy, onReturn, initialAction,
     const outlet = outlets.find(o => o.id === outletId);
     const customer = (data.customers || []).find(c => c.id === outlet?.customerId);
     const catalog = (data.products || []).flatMap(product => (product.packs || []).map(pack => ({ ...product, pack })));
-    const priceFor = item => {
-        const rules = (data.clientPrices || []).filter(rule => Number(rule.productId) === Number(item.id) && rule.startsOn <= deliveryDate && (!outlet || !rule.outletId || rule.outletId === outlet.id) && (!outlet || rule.customerId === outlet.customerId));
-        const own = rules.find(rule => String(rule.packId) === String(item.pack.id)) || rules.find(rule => !rule.packId);
-        if (own) return own.packId ? Number(own.price) : money(Number(own.price) * Number(item.pack.capacityKg));
-        return item.pack.salePrice == null ? null : Number(item.pack.salePrice);
-    };
+    const priceFor=item=>priceForPack({rules:data.clientPrices||[],productId:item.id,pack:item.pack,customerId:outlet?.customerId,outletId:outlet?.id,onDate:deliveryDate,standardPrice:item.salePrice});
     catalog.forEach(item => { item.price = priceFor(item); });
     const lines = Object.entries(cart).filter(([, boxes]) => Number(boxes) > 0).map(([packId, boxes]) => {
         const item = catalog.find(x => String(x.pack.id) === String(packId));
@@ -131,7 +120,7 @@ export default function Orders({ data, user, run, busy, onReturn, initialAction,
     useEffect(() => {
         if (!initialAction) return;
         setOrderSearch(''); setDueFilter('all');
-        if (initialAction.kind === 'catalog') { setView('catalog'); setReview(false); }
+        if (initialAction.kind === 'catalog') { setView('catalog'); setReview(false);if(initialAction.query)setSearch(initialAction.query); }
         else if (initialAction.kind === 'order') { const order = data.orders.find(o => o.id === initialAction.id); setFocusId(initialAction.id); setView(['submitted', 'approved'].includes(order?.status) ? order.status : 'history'); }
         else if (initialAction.kind === 'filter') { setFocusId(null); setView(initialAction.status); }
     }, [initialAction]);

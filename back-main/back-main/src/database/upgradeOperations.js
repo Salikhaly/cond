@@ -6,6 +6,8 @@ module.exports = async () => db.transaction(async t => {
     const M=require('../models/operations');
     await db.query('ALTER TABLE account_accesses ADD COLUMN IF NOT EXISTS "productionOrders" BOOLEAN NOT NULL DEFAULT FALSE',{transaction:t});
     await require('../models/accountLink').sync({transaction:t});
+    for(const model of Object.values(require('../models/storeCatalog')))await model.sync({transaction:t});
+    await db.query(`ALTER TABLE product_displays ADD COLUMN IF NOT EXISTS thumbnail TEXT DEFAULT '', ADD COLUMN IF NOT EXISTS "photoVersion" INTEGER NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS "catalogGroup" VARCHAR(120) NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS "catalogVisible" BOOLEAN NOT NULL DEFAULT FALSE`,{transaction:t});
     await db.query('ALTER TABLE expense_meta ADD COLUMN IF NOT EXISTS \"costGroup\" VARCHAR(255)',{transaction:t});
     await db.query('ALTER TABLE \"work_profiles\" ADD COLUMN IF NOT EXISTS photo TEXT, ADD COLUMN IF NOT EXISTS instagram VARCHAR(255), ADD COLUMN IF NOT EXISTS note TEXT, ADD COLUMN IF NOT EXISTS parents JSONB NOT NULL DEFAULT \'{}\'::jsonb',{transaction:t});
     await db.query('ALTER TABLE "work_policies" ADD COLUMN IF NOT EXISTS "pieceRates" JSONB NOT NULL DEFAULT \'[]\'::jsonb',{transaction:t});

@@ -21,7 +21,8 @@ export function RecipeEditor({product,data,run,busy,onClose}){
 }
 export default function Recipes({data,run,busy,initialAction,onNavigate}){
  const [costing,setCosting]=useState(initialAction?.kind==='full-cost');useEffect(()=>{if(initialAction?.kind==='full-cost')setCosting(true);},[initialAction]);
- const [selected,setSelected]=useState(null),[search,setSearch]=useState('');
+ const [selected,setSelected]=useState(initialAction?.productId||null),[search,setSearch]=useState('');
+ useEffect(()=>{if(initialAction?.productId)setSelected(Number(initialAction.productId));},[initialAction]);
  const product=data.products.find(p=>p.id===selected);
  if(costing&&data.permissions?.finance!==false)return <FullCost data={data} onBack={()=>setCosting(false)} onNavigate={onNavigate}/>;
  if(product)return <RecipeEditor key={product.id} product={product} data={data} run={run} busy={busy} onClose={()=>setSelected(null)}/>;

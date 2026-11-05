@@ -3,7 +3,7 @@
 const CACHE = 'cond-shell-v2-__BUILD__';
 const ASSETS = __ASSETS__;
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())));
-self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('cond-shell-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('cond-shell-') && k !== CACHE).slice(0,-1).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('message', event => { if (event.data === 'SKIP_WAITING') self.skipWaiting(); });
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
@@ -16,5 +16,5 @@ self.addEventListener('fetch', event => {
             return await current.match(url.pathname) || await current.match('/index.html');
         })); return;
     }
-    event.respondWith(caches.open(CACHE).then(current => current.match(event.request)).then(hit => hit || caches.match(event.request)).then(hit => hit || fetch(event.request)));
+    event.respondWith(caches.open(CACHE).then(current => current.match(event.request)).then(hit => hit || caches.match(event.request)).then(hit => hit || fetch(event.request).then(async response => { if(response.ok && /\.(js|css)$/.test(url.pathname)){try{const current=await caches.open(CACHE);await current.put(event.request,response.clone());}catch{}}return response;})));
 });

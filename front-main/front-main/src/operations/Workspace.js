@@ -82,10 +82,10 @@ export default function Workspace() {
     const [intent, setIntent] = useState(null);
     const [online, setOnline] = useState(navigator.onLine);
     const mainRef = useRef(null);
-    const authEpoch = useRef(0);
+    const authEpoch = useRef(0),loadSequence=useRef(0);
     const running = useRef(false);
     const mounted = useRef(true);
-    const load = useCallback(async () => { const epoch = authEpoch.current; const d = await api('/dashboard'); if (mounted.current && epoch === authEpoch.current) setData(d); }, []);
+    const load = useCallback(async () => { const epoch = authEpoch.current,sequence=++loadSequence.current; const d = await api('/dashboard'); if (mounted.current && epoch === authEpoch.current&&sequence===loadSequence.current) setData(d); }, []);
     const login = useCallback(u => { setProfileOpen(false);setSearchOpen(false);const link=notificationLink(window.location.search,u.role);setOrderOutlet('');authEpoch.current++; setUser(u); setData(null); setTab(link?.section||tabs[u.role]?.[0][0] || 'overview');setIntent(link?.intent||null);setNotice(null); }, []);
     useEffect(() => { const update = () => setOnline(navigator.onLine); window.addEventListener('online', update); window.addEventListener('offline', update); return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update); }; }, []);
     useEffect(() => {
@@ -132,12 +132,12 @@ export default function Workspace() {
     const nav=(tabs[user.role]||[]).filter(([id])=>user.role!=='super_admin'||(permissions[map[id]]!==false||id==='users'&&permissions.settings===true)).filter(([id])=>id!=='suppliers'||permissions.finance!==false);
     const allowedTab=nav.some(([id])=>id===tab)?tab:nav[0]?.[0];
     const current = nav.find(t => t[0] === allowedTab) || nav[0];
-    const primary = user.role === 'super_admin' ? nav.filter(([id]) => ['overview', 'materials', 'orders', 'finance'].includes(id)) : nav;
+    const primary = user.role === 'super_admin' ? ['overview','orders','production','finance'].flatMap(key=>nav.filter(([id])=>id===key&&(id!=='finance'||data?.isOwner||user.authority?.owner))) : nav;
     const secondary = nav.filter(([id]) => !primary.some(([main]) => main === id));
-    const selectTab = (id, action = null) => { if(id==='finance'&&action?.kind==='expenses')id='expenses';if(id==='materials'&&action?.kind==='counts')id='inventory'; mainRef.current?.scrollTo({top:0});setIntent(action); setTab(id); setNotice(null); setMore(false);setProfileOpen(false);setSearchOpen(false); };
+    const selectTab = (id, action = null) => { if(id==='finance'&&action?.kind==='expenses')id='expenses';if(id==='materials'&&action?.kind==='counts')id='inventory'; mainRef.current?.scrollTo({top:0});setIntent(action); setTab(id); setNotice(null); setMore(false);setProfileOpen(false);setSearchOpen(false);if(!running.current)load().catch(e=>setNotice({error:true,text:e.message})); };
     return <div className={'op-app studio-app op-role-' + user.role+' suite-section-'+allowedTab}><ActionSearch open={searchOpen} onClose={()=>setSearchOpen(false)} nav={nav} data={data||{}} onNavigate={selectTab}/>
         <aside className="op-sidebar"><Brand/><span className="op-side-caption">УПРАВЛЕНИЕ ПРОИЗВОДСТВОМ</span><nav className="op-desktopnav" aria-label="Разделы">{nav.map(([id, icon, label]) => <button key={id} data-section={id} aria-current={allowedTab === id ? 'page' : undefined} className={allowedTab === id ? 'active' : ''} onClick={() => selectTab(id)}><span aria-hidden="true"><Icon name={id}/></span>{label}{id === 'orders' && data?.orders?.some(o => o.status === 'submitted') && <i />}</button>)}</nav>
-<nav className="op-mobilenav" aria-label="Разделы на телефоне">{primary.map(([id, icon, label]) => <button key={id} data-section={id} aria-current={allowedTab === id ? 'page' : undefined} className={allowedTab === id ? 'active' : ''} onClick={() => selectTab(id)}><span aria-hidden="true"><Icon name={id}/></span>{id === 'materials' ? 'Приходы' : id === 'finance' ? 'Отчёты' : label}</button>)}{secondary.length > 0 && <button aria-expanded={more} className={secondary.some(([id]) => id === allowedTab) ? 'active' : ''} onClick={() => setMore(v => !v)}><span aria-hidden="true"><Icon name="more"/></span>Ещё</button>}</nav>
+<nav className="op-mobilenav" aria-label="Разделы на телефоне">{primary.map(([id, icon, label]) => <button key={id} data-section={id} aria-current={allowedTab === id ? 'page' : undefined} className={allowedTab === id ? 'active' : ''} onClick={() => selectTab(id)}><span aria-hidden="true"><Icon name={id}/></span>{id === 'materials' ? 'Приходы' : id === 'finance' ? 'Деньги' : id==='overview'?'Главная':label}</button>)}{secondary.length > 0 && <button aria-expanded={more} className={secondary.some(([id]) => id === allowedTab) ? 'active' : ''} onClick={() => setMore(v => !v)}><span aria-hidden="true"><Icon name="more"/></span>Ещё</button>}</nav>
 {more && <div className="op-more-menu">{secondary.map(([id, icon, label]) => <button key={id} onClick={() => selectTab(id)}><Icon name={id}/> {label}</button>)}</div>}<div className="op-side-bottom"><span className="op-local-dot" />Рабочая система<p>Сырьё → производство → отгрузка</p></div></aside>
         <div className="op-main" ref={mainRef}><header className="op-topbar"><div><span className="op-breadcrumb">Рабочее место /</span><h1><span className={'suite-section-icon section-'+allowedTab}><Icon name={allowedTab}/></span>{allowedTab==='overview'?'COND':current?.[2]}</h1></div><div className="studio-header-actions">{['finance','payroll','materials','suppliers','shops','catalog','expenses','inventory','recipes'].includes(allowedTab)&&<ExportActions compact title={current?.[2]||'Отчёт'}/>}<NotificationCenter data={data||{}} user={user} onNavigate={selectTab} onNotice={setNotice}/><button className="studio-header-search" aria-label="Поиск действий" disabled={!data} onClick={()=>{setSearchOpen(true);setProfileOpen(false);setMore(false);}}><Icon name="search"/></button><div className="cond-profile-wrap"><button className="cond-profile-button" aria-label="Профиль" aria-expanded={profileOpen} onClick={()=>setProfileOpen(v=>!v)}>{user.name?.slice(0,1)}</button>{profileOpen&&<div className="cond-profile-menu"><strong>{user.name}</strong><small>{user.role==='super_admin'&&user.authority?.owner?'Владелец бизнеса':roles[user.role]}</small><button onClick={logout}>Выйти из аккаунта</button><button className="cond-profile-close" onClick={()=>setProfileOpen(false)}>Закрыть</button></div>}</div></div></header>
             <main className="op-content" id="main-content"><PhoneQueue refresh={load} /><Connection user={user} run={run} busy={busy} offline={Boolean(data?._offline)} />{data?._offline && <div className="op-alert" role="status">Без сети · данные на {new Date(data._savedAt).toLocaleString("ru-RU")}.</div>}{!online&&!data?._offline && <div className="op-alert error" role="alert">Нет сети. Записи сохранятся и отправятся позже.</div>}{notice && <div className={'op-alert ' + (notice.error ? 'error' : 'success')} role={notice.error ? 'alert' : 'status'}>{notice.text}<button className="ghost" aria-label="Закрыть уведомление" onClick={() => setNotice(null)}>×</button></div>}
@@ -146,7 +146,7 @@ export default function Workspace() {
                     {allowedTab==='directory'&&<ExpenseDirectory data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab==='expenses'&&<Expenses onNavigate={selectTab} initialAction={intent} data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab==='inventory'&&<StockCounts data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
-                    {allowedTab === 'overview' && <Overview data={data} setTab={selectTab} user={user} />}
+                    {allowedTab === 'overview' && <Overview data={data} setTab={selectTab} user={user} onSearch={()=>setSearchOpen(true)}/>}
                     {allowedTab === 'approvals' && <ApprovalsScreen data={data} user={user} onNavigate={selectTab} />}
                     {allowedTab === 'materials' && <Materials onPaySupplier={id=>selectTab('suppliers',{kind:'receipt-payment',id})} data={data} run={run} initialAction={intent} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'packaging' && <Packaging data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
@@ -181,3 +181,5 @@ import './approvals.css';
 import './design-system.css';
 
 import './ux-refinement.css';
+
+import './owner-mobile.css';

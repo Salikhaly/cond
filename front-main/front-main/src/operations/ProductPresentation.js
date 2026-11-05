@@ -1,0 +1,7 @@
+import React,{useState} from 'react';
+import {api} from './api';
+import {Field} from './Fields';
+export default function ProductPresentation({product,data,run,busy}){
+ const [form,setForm]=useState({catalogVisible:product.catalogVisible===true,catalogGroup:product.catalogGroup||'',sortOrder:Number(product.sortOrder||0),description:product.description||''});
+ return <details className="op-help"><summary>Витрина магазина · {product.catalogVisible?'Показывается':'Скрыт'}</summary><form onSubmit={e=>{e.preventDefault();run(()=>api('/products/'+product.id+'/display',form,'PATCH'),'Витрина обновлена');}}><label className="op-check"><input type="checkbox" checked={form.catalogVisible} onChange={e=>setForm(f=>({...f,catalogVisible:e.target.checked}))}/>Показывать товар магазинам</label><Field label="Группа товаров" maxLength={120} list={'product-groups-'+product.id} placeholder="Например: Печенье" value={form.catalogGroup} onChange={e=>setForm(f=>({...f,catalogGroup:e.target.value}))}/><datalist id={'product-groups-'+product.id}>{[...new Set((data.products||[]).map(p=>p.catalogGroup).filter(Boolean))].map(name=><option key={name} value={name}/>)}</datalist><Field label="Описание для покупателя"><textarea maxLength={1500} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))}/></Field><Field label="Порядок показа" type="number" step="1" min="-100000" max="100000" value={form.sortOrder} onChange={e=>setForm(f=>({...f,sortOrder:e.target.value}))}/><button disabled={busy}>Сохранить витрину</button></form></details>;
+}

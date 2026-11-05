@@ -79,7 +79,10 @@ module.exports = async ({
     photo
   }, 'PATCH');
   const p = (await call(firm, '/operations/dashboard')).products.find(p => p.id === product.id);
-  check(p.photo === photo && p.description === 'Описание для магазина' && !('priceForEmployee' in p), 'Catalogue exposes photos and descriptions without payroll rates');
+  check(p.photo === '' && p.hasPhoto && p.photoUrl.startsWith('/api/operations/products/') && p.description === 'Описание для магазина' && !('priceForEmployee' in p), 'Catalogue exposes photos and descriptions without payroll rates');
+  const media=await fetch('http://127.0.0.1:3001'+p.photoUrl,{headers:{Authorization:'Bearer '+firm}});
+  check(media.ok&&media.headers.get('content-type').startsWith('image/png')&&Buffer.from(await media.arrayBuffer()).equals(Buffer.from(photo.split(',')[1],'base64')),'Product photos load separately without bloating the dashboard');
+  check((await fetch('http://127.0.0.1:3001'+p.photoUrl)).status===401,'Product photo API requires authentication');
   await call(firm, '/operations/products/' + product.id + '/display', {
     photo: ''
   }, 'PATCH', 403);

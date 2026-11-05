@@ -11,7 +11,7 @@ console.log("process.env.API_URL:", process.env.API_URL_DEV);
 
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
-if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
+if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator && !window.location.hash.startsWith('#/shop/')) {
     navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
         .then(registration => registration.update())
         .catch(() => {});
