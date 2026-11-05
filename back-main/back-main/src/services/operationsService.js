@@ -9,7 +9,7 @@ const { randomUUID } = require('crypto');
 const bridge = require('./legacyBridge');
 const money = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const num = (v, label, zero = false) => {
-    const n = Number(v);
+    const n = Number(typeof v==='string'?v.trim().replace(',','.'):v);
     if (!['number', 'string'].includes(typeof v) || String(v).trim() === '' || !Number.isFinite(n) || (zero ? n < 0 : n <= 0) || n > 1e9 || Math.abs(n - Math.round(n * 10000) / 10000) > 1e-8) throw ApiError.badRequest(`Некорректное значение: ${label} (не более 4 знаков после запятой)`);
     return n;
 };
@@ -78,10 +78,11 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
     const packagingLines = [];
     if (pack) {
         const box = required(await M.Material.findByPk(pack.boxMaterialId, { transaction: tx, ...(tx ? { lock: tx.LOCK.UPDATE } : {}) }), 'Коробка');
-        const film = await M.Material.findOne({ where: { kind: 'film', active: true }, transaction: tx });
+        const film = await M.Material.findOne({ where: { kind: 'film', active: true }, transaction: tx, ...(tx ? {lock:tx.LOCK.UPDATE} : {}) });
         const boxQty = boxes;
         packagingLines.push({ materialId: box.id, name: box.name, unit: box.unit, quantity: boxQty, unitCost: Number(box.unitCost), cost: money(boxQty * Number(box.unitCost)), balance: Number(box.quantity), enough: Number(box.quantity) >= boxQty });
         const filmQty = round(boxes * Number(pack.filmQtyM || 0));
+        if (filmQty > 0 && !film) throw ApiError.badRequest('Добавьте плёнку на склад и оформите её приход');
         if (film && filmQty > 0) packagingLines.push({ materialId: film.id, name: film.name, unit: film.unit, quantity: filmQty, unitCost: Number(film.unitCost), cost: money(filmQty * Number(film.unitCost)), balance: Number(film.quantity), enough: Number(film.quantity) >= filmQty });
     }
     const materialCost = round(lines.reduce((s, l) => s + l.cost, 0));
@@ -449,7 +450,7 @@ module.exports = {
                 const same = expected && !Array.isArray(expected) && fields.every(k => Number(expected[k]) === Number(calc[k])) && Array.isArray(expected.lines) && expected.lines.length === calc.lines.length && calc.lines.every(l => expected.lines.some(x => x && x.materialId === l.materialId && Number(x.quantity) === Number(l.quantity) && Number(x.unitCost) === Number(l.unitCost)));
                 if (!same) throw new ApiError(409, 'Расчёт изменился. Закройте калькуляцию и нажмите «Проверить выпуск» заново');
             }
-            if (!calc.enough) throw ApiError.badRequest('Недостаточно материалов: ' + calc.lines.filter(l => !l.enough).map(l => l.name).join(', '));
+            if (!calc.enough) throw ApiError.badRequest('Недостаточно материалов: ' + [...calc.lines,...(calc.packagingLines||[])].filter(l => !l.enough).map(l => l.name).join(', '));
             for (const l of [...calc.lines, ...(calc.packagingLines || [])]) await M.Material.decrement('quantity', { by: l.quantity, where: { id: l.materialId }, transaction: t });
             const [stock] = await M.Stock.findOrCreate({ where: { productId: p.productId }, defaults: { kg: product.weightTotal }, transaction: t });
             await stock.reload({transaction:t,lock:t.LOCK.UPDATE});
