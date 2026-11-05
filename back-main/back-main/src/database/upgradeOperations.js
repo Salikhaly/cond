@@ -4,6 +4,7 @@ module.exports = async () => db.transaction(async t => {
     // One-time transition: pending requests no longer reserve warehouse stock.
     await db.query('SELECT pg_advisory_xact_lock(42810241)',{transaction:t});
     const M=require('../models/operations');
+    await db.query('ALTER TABLE '+db.getQueryInterface().queryGenerator.quoteTable(M.ProductPack.getTableName())+' ADD COLUMN IF NOT EXISTS "filmMaterialId" UUID REFERENCES materials(id)',{transaction:t});
     await db.query('ALTER TABLE '+db.getQueryInterface().queryGenerator.quoteTable(M.ClientBonus.getTableName())+' ADD COLUMN IF NOT EXISTS goods JSONB',{transaction:t});
     await db.query('ALTER TABLE account_accesses ADD COLUMN IF NOT EXISTS "productionOrders" BOOLEAN NOT NULL DEFAULT FALSE',{transaction:t});
     await require('../models/accountLink').sync({transaction:t});

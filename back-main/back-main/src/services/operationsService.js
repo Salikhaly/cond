@@ -7,6 +7,13 @@ const ApiError = require('../exceptions/ApiError');
 const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const bridge = require('./legacyBridge');
+const {selectFilm}=require('../domain/filmSelection');
+async function selectedFilmId(pack){
+    if(pack.filmMaterialId&&!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(pack.filmMaterialId))throw ApiError.badRequest('Выберите плёнку со склада');
+    const film=selectFilm(pack,await M.Material.findAll({where:{kind:'film',active:true}}));
+    if((Number(String(pack.filmQtyM).replace(',','.'))>0||pack.filmMaterialId)&&!film)throw ApiError.badRequest('Выберите плёнку со склада в настройках коробки товара');
+    return film?.id||null;
+}
 const money = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const num = (v, label, zero = false) => {
     const n = Number(typeof v==='string'?v.trim().replace(',','.'):v);
@@ -32,13 +39,12 @@ async function catalog(user) {
     const packs=await M.ProductPack.findAll({where:{active:true},order:[['capacityKg','ASC']]});
     const packStocks=await M.PackStock.findAll();
     const packagingMaterials=await M.Material.findAll({where:{kind:['box','film']}});
-    const film=await M.Material.findOne({where:{kind:'film',active:true}});
     const packView = p => packs.filter(x=>x.productId===p.id).map(x=>{
-        const box=packagingMaterials.find(m=>m.id===x.boxMaterialId),stock=packStocks.find(s=>s.packId===x.id);
+        const box=packagingMaterials.find(m=>m.id===x.boxMaterialId),stock=packStocks.find(s=>s.packId===x.id),film=selectFilm(x,packagingMaterials);
         const costPerBox=round(Number(p.priceTotal||0)*Number(x.capacityKg)+Number(box?.unitCost||0)+Number(film?.unitCost||0)*Number(x.filmQtyM||0)+Number(x.laborPerBox||0)+Number(x.overheadPerBox||0));
         const fallback=sellingPrices.find(s=>s.productId===p.id)?.price;
         const salePrice=x.salePrice==null?(fallback==null?null:money(Number(fallback)*Number(x.capacityKg))):Number(x.salePrice);
-        return {id:x.id,capacityKg:Number(x.capacityKg),boxMaterialId:x.boxMaterialId,filmMaterialId:film?.id||null,boxName:box?.name||('Коробка '+x.capacityKg+' кг'),filmQtyM:Number(x.filmQtyM||0),salePrice,costPerBox,availableBoxes:round(Number(stock?.boxes||0)-Number(stock?.reservedBoxes||0)),boxes:round(stock?.boxes||0),reservedBoxes:round(stock?.reservedBoxes||0),laborPerBox:Number(x.laborPerBox||0),overheadPerBox:Number(x.overheadPerBox||0)};
+        return {id:x.id,capacityKg:Number(x.capacityKg),boxMaterialId:x.boxMaterialId,filmMaterialId:film?.id||null,boxName:box?.name||('Коробка '+x.capacityKg+' кг'),filmQtyM:Number(x.filmQtyM||0),salePrice,costPerBox:Number(x.filmQtyM)>0&&!film?null:costPerBox,filmSelectionRequired:Number(x.filmQtyM)>0&&!film,availableBoxes:round(Number(stock?.boxes||0)-Number(stock?.reservedBoxes||0)),boxes:round(stock?.boxes||0),reservedBoxes:round(stock?.reservedBoxes||0),laborPerBox:Number(x.laborPerBox||0),overheadPerBox:Number(x.overheadPerBox||0)};
     });
     const used=await M.Production.findAll({where:{status:{[Op.in]:['draft','posted']}},attributes:['productId'],group:['productId']});
     const personal=user.role==='employee'?await require('./workPolicyService').at(user.id,require('./businessDay').today()):null;
@@ -78,11 +84,12 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
     const packagingLines = [];
     if (pack) {
         const box = required(await M.Material.findByPk(pack.boxMaterialId, { transaction: tx, ...(tx ? { lock: tx.LOCK.UPDATE } : {}) }), 'Коробка');
-        const film = await M.Material.findOne({ where: { kind: 'film', active: true }, transaction: tx, ...(tx ? {lock:tx.LOCK.UPDATE} : {}) });
+        const films = await M.Material.findAll({where:{kind:'film',active:true},transaction:tx,...(tx?{lock:tx.LOCK.UPDATE}:{}),order:[['id','ASC']]});
+        const film = selectFilm(pack,films);
         const boxQty = boxes;
         packagingLines.push({ materialId: box.id, name: box.name, unit: box.unit, quantity: boxQty, unitCost: Number(box.unitCost), cost: money(boxQty * Number(box.unitCost)), balance: Number(box.quantity), enough: Number(box.quantity) >= boxQty });
         const filmQty = round(boxes * Number(pack.filmQtyM || 0));
-        if (filmQty > 0 && !film) throw ApiError.badRequest('Добавьте плёнку на склад и оформите её приход');
+        if (filmQty > 0 && !film) throw ApiError.badRequest('Выберите плёнку со склада в настройках коробки товара и оформите её приход');
         if (film && filmQty > 0) packagingLines.push({ materialId: film.id, name: film.name, unit: film.unit, quantity: filmQty, unitCost: Number(film.unitCost), cost: money(filmQty * Number(film.unitCost)), balance: Number(film.quantity), enough: Number(film.quantity) >= filmQty });
     }
     const materialCost = round(lines.reduce((s, l) => s + l.cost, 0));
@@ -233,9 +240,11 @@ module.exports = {
         if (box.kind !== 'box') throw ApiError.badRequest('Выберите коробку');
         const capacityKg = b.capacityKg == null || b.capacityKg === '' ? Number(box.capacityKg) : num(b.capacityKg, 'вместимость коробки');
         if (!(capacityKg > 0)) throw ApiError.badRequest('Укажите вместимость коробки');
+        const filmMaterialId=await selectedFilmId(b);
         const [pack, created] = await M.ProductPack.findOrCreate({
             where: { productId: product.id, boxMaterialId: box.id },
             defaults: {
+                filmMaterialId,
                 capacityKg,
                 filmQtyM: b.filmQtyM == null || b.filmQtyM === '' ? 0 : num(b.filmQtyM, 'плёнка на коробку', true),
                 salePrice: b.salePrice == null || b.salePrice === '' ? null : money(num(b.salePrice, 'цена за коробку', true)),
@@ -246,6 +255,7 @@ module.exports = {
         });
         if (!created && b.replace !== true) throw ApiError.badRequest('Такой тип коробки уже добавлен');
         if (!created) await pack.update({
+            ...(b.filmMaterialId!==undefined||b.filmQtyM!==undefined?{filmMaterialId}:{}),
             capacityKg,
             filmQtyM: b.filmQtyM == null ? pack.filmQtyM : num(b.filmQtyM, 'плёнка на коробку', true),
             salePrice: b.salePrice == null ? pack.salePrice : num(b.salePrice, 'цена за коробку', true),
@@ -307,6 +317,7 @@ module.exports = {
         admin(user);
         const pack = required(await M.ProductPack.findByPk(id), 'Тип коробки');
         const values = {};
+        if(b.filmMaterialId!==undefined||b.filmQtyM!==undefined)values.filmMaterialId=await selectedFilmId({filmMaterialId:b.filmMaterialId===undefined?pack.filmMaterialId:b.filmMaterialId||null,filmQtyM:b.filmQtyM??pack.filmQtyM});
         for (const key of ['filmQtyM', 'salePrice', 'laborPerBox', 'overheadPerBox']) {
             if (b[key] !== undefined) values[key] = b[key] === '' || b[key] === null ? (key === 'salePrice' ? null : 0) : num(b[key], key, true);
         }
