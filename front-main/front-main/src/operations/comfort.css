@@ -33,3 +33,5 @@
 .cond-staff-hero{display:flex;align-items:center;gap:16px;padding:12px 0 20px}.cond-staff-hero .op-person-avatar{width:64px;height:64px;font-size:22px;flex-shrink:0}.cond-staff-hero h3{margin:0 0 5px}.cond-staff-hero small{color:#748376}.cond-staff-hero a{display:inline-block;margin:10px 12px 0 0;font-size:13px;color:#216854}
 
 .op-app{--op-green:#216854;--op-ink:#20372f;--op-soft:#edf4ee;--op-line:#e3eae5;--op-muted:#718078}
+
+.op-app .cond-payment-source{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;margin:12px 0;padding:12px;text-align:left;border-radius:12px;background:#fff;color:#246b58;border:1px solid #e1e9e6;box-shadow:none;font-size:14px}.cond-payment-source>span{min-width:0;overflow-wrap:anywhere}.cond-payment-source>b{white-space:nowrap;flex-shrink:0;font-size:14px}.op-app p.cond-payment-source{color:inherit}

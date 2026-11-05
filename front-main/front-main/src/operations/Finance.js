@@ -10,12 +10,12 @@ import { Field, Table, Empty } from './Fields';
 export default function Finance({data,run,busy,onNavigate,initialAction}) {
     const [screen,setScreen]=useState(initialAction?.kind==='expenses'?'expenses':initialAction?.kind==='report-period'?'reports':data.isOwner?'money':'reports');
     const [from,setFrom]=useState(''), [to,setTo]=useState('');
-    useEffect(()=>{if(initialAction?.kind==='expenses')setScreen('expenses');if(initialAction?.kind==='money'&&data.isOwner)setScreen('money');if(initialAction?.kind==='cash')setScreen('cash');if(initialAction?.kind==='analytics')setScreen('analytics');if(initialAction?.kind==='report-period')setScreen('reports');},[initialAction]);
+    useEffect(()=>{if(initialAction?.kind==='expenses')setScreen('expenses');if(['money','money-period'].includes(initialAction?.kind)&&data.isOwner)setScreen('money');if(initialAction?.kind==='cash')setScreen('cash');if(initialAction?.kind==='analytics')setScreen('analytics');if(initialAction?.kind==='report-period')setScreen('reports');},[initialAction]);
     const filter=row=>{const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Qyzylorda',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(row.date));return(!from||day>=from)&&(!to||day<=to);};
     const originalIncome=(data.incomes||[]).filter(filter),returnRows=returnSales(data).filter(filter),income=[...originalIncome,...returnRows].sort((a,b)=>String(b.date).localeCompare(String(a.date))),expense=(data.outcomes||[]).filter(filter);
     const incomeTotal=income.reduce((s,r)=>s+Number(r.totalAmount),0),expenseTotal=expense.reduce((s,r)=>s+Number(r.totalAmount),0);
     const navigation=<nav className="op-report-tabs ux-finance-mode" aria-label="Деньги и результат">{data.isOwner&&<button aria-pressed={screen==='money'} className={screen==='money'?'active':''} onClick={()=>setScreen('money')}>Деньги</button>}<button aria-pressed={screen==='reports'} className={screen==='reports'?'active':''} onClick={()=>setScreen('reports')}>Результат бизнеса</button></nav>;
-    if(screen==='money'&&data.isOwner)return <>{navigation}<Money data={data} run={run} busy={busy} onNavigate={onNavigate}/></>;
+    if(screen==='money'&&data.isOwner)return <>{navigation}<Money initialAction={initialAction?.kind==='money-period'?initialAction:undefined} data={data} run={run} busy={busy} onNavigate={onNavigate}/></>;
     if(screen==='expenses')return <><button className="ghost" onClick={()=>setScreen('reports')}>← К отчёту владельца</button><Expenses data={data} run={run} busy={busy} onNavigate={onNavigate}/></>;
     if(screen==='cash')return <><button className="ghost" onClick={()=>setScreen('reports')}>← К отчёту владельца</button><CashFlow data={data}/></>;
     if(screen==='analytics')return <><button className="ghost" onClick={()=>setScreen('reports')}>← К отчёту владельца</button><BusinessAnalytics data={data}/></>;

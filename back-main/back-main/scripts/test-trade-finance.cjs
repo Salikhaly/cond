@@ -13,9 +13,14 @@ async function main(){
  const p80=await pay(80000,[[first.id,80000]]);view=await fin.visible(admin);let s=view.suppliers.find(s=>s.id===supplier.id);
  check(s.purchases===200000&&s.paid===80000&&s.debt===120000,'200000 purchase, 80000 payment: supplier debt is 120000');
  check(!s.documents[0].paid&&Number((await M.Material.findByPk(material.id)).quantity)===initialKg,'Partial payment does not receive stock again');
+ const moneyService=require('../src/services/moneyService'),moneyView=await moneyService.read(admin),paidRow=moneyView.rows.find(r=>r.sourceId===p80.id);
+ check(paidRow?.allocations.length===1&&paidRow.allocations[0].documentType==='receipt'&&paidRow.allocations[0].documentId===first.id&&paidRow.allocations[0].amount===80000,'Owner money row opens the exact receipt and allocated amount');
+ check(paidRow.status==='posted'&&paidRow.actorName===admin.name,'Payment detail retains posted status and author');
+ for(const u of [firm,worker]){await assert.rejects(()=>moneyService.read(u));n++;}
  const fully=await ops.payReceipt(admin,first.id,{date,method:'bank'});check(fully.paid===true,'Existing pay-receipt route pays only the remaining balance');
  check((await fin.visible(admin)).suppliers.find(s=>s.id===supplier.id).debt===0&&await M.CashEntry.count()===2,'Two separate payments close one receipt without duplication');
  await fin.reverse(admin,p80.id,{date,reason:'Ошибочная запись оплаты'});s=(await fin.visible(admin)).suppliers.find(s=>s.id===supplier.id);
+ const reversedRow=(await moneyService.read(admin)).rows.find(r=>r.sourceId===p80.id);check(reversedRow.status==='reversed'&&reversedRow.allocations[0].documentId===first.id,'Cancelled payment preserves original source history');
  check(s.paid===120000&&s.debt===80000&&!s.documents[0].paid,'Reversing one payment restores its debt and receipt status');
  check(Number(await Outcome.sum('totalAmount'))===120000,'Expense history contains original payment and compensating reversal once');
  await assert.rejects(()=>fin.reverse(admin,p80.id,{date,reason:'Повтор'}));n++;
