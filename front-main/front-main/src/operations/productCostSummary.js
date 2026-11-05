@@ -1,3 +1,4 @@
+const {knownMaterialPrices}=require('../../../../back-main/back-main/src/domain/materialPriceEvidence');
 const {ingredientLines}=require('../../../../back-main/back-main/src/domain/recipeIngredients');
 const {selectFilm}=require('../../../../back-main/back-main/src/domain/filmSelection');
 const {calculationEstimate}=require('./calculationEstimate');
@@ -9,6 +10,7 @@ function productCostSummary(product,data,packId){
  if(!recipe?.lines?.length||!(Number(recipe.outputKg)>0))issues.push({kind:'recipe',label:'Добавьте состав товара'});
  const costingRecipe=pack&&recipe?{...recipe,lines:ingredientLines(recipe,[...materials,...(data.archivedMaterials||[])])}:recipe;
  if(recipe&&pack&&!costingRecipe.lines.length)issues.push({kind:'recipe',label:'Добавьте ингредиенты: упаковка учитывается отдельно'});
+ const pricesKnown=knownMaterialPrices(materials,data.receipts,data.receiptDocuments,data.receiptCorrections,data.stockCounts);
  const estimate=calculationEstimate({recipe:costingRecipe,materials,kg,ratePerKg:0});
  const lines=estimate.lines.map(l=>{const archived=(data.archivedMaterials||[]).find(m=>String(m.id)===String(l.materialId));return {...l,name:archived?.name||l.name,unit:archived?.unit||l.unit,kind:'ingredient'};});
  if(pack){
@@ -19,8 +21,7 @@ function productCostSummary(product,data,packId){
  for(const line of lines){const material=materials.find(m=>String(m.id)===String(line.materialId));
   if(!material){const archived=(data.archivedMaterials||[]).find(m=>String(m.id)===String(line.materialId));issues.push({kind:'material',scope:line.kind,materialId:line.materialId,label:archived?'Уберите из состава или восстановите: '+archived.name:'Не найден материал: '+line.name});}
   else {
-   const zeroReceipt=[...(data.receipts||[]),...(data.receiptDocuments||[]).flatMap(d=>d.lines||[])].some(l=>String(l.materialId)===String(material.id)&&Number(l.quantity)>0&&l.unitCost!=null&&l.unitCost!==''&&Number(l.unitCost)===0);
-   if(material.unitCost==null||material.unitCost===''||!Number.isFinite(Number(material.unitCost))||Number(material.unitCost)<0||Number(material.unitCost)===0&&!zeroReceipt)issues.push({kind:'price',materialId:line.materialId,label:'Уточните цену: '+line.name});
+   if(!pricesKnown.has(String(material.id)))issues.push({kind:'price',materialId:line.materialId,label:'Уточните цену: '+line.name});
   }
   if(!(line.quantity>0))issues.push({kind:'recipe',label:'Укажите расход: '+line.name});
  }

@@ -1,0 +1,15 @@
+const assert=require('node:assert/strict'),{productionPreviewBody,receiptForProduction,confirmedReturn}=require('../src/operations/productionWorkflow');
+const record={id:'act-1',productId:7,packId:'box-25',boxes:4,kg:10,workerId:2,date:'2026-11-05'};
+assert.deepEqual(productionPreviewBody(record),{productId:7,packId:'box-25',boxes:4,workerId:2,date:record.date});
+assert.deepEqual(productionPreviewBody({...record,packId:null}),{productId:7,kg:10,workerId:2,date:record.date});
+const origin={returnDay:{date:record.date,userId:2},returnReport:{kind:'report-period',from:'2026-11-01',to:record.date}};
+const action=receiptForProduction(record,{materialId:'flour',quantity:10,balance:1.5,unit:'кг'},origin);
+assert.equal(action.missing,8.5);assert.equal(action.materialId,'flour');assert.equal(action.kind,'receipt');
+assert.deepEqual(action.returnTo,{section:'production',label:'К проверке выпуска',action:{kind:'check-production',id:'act-1',...origin}});
+assert.equal(confirmedReturn(action,{id:'receipt-1'}),action.returnTo);
+assert.equal(confirmedReturn(action,{id:'queue-1',pending:true}),null);
+assert.equal(confirmedReturn(action,undefined),null);
+assert.equal(confirmedReturn({}, {id:'receipt-1'}),null);
+assert.equal(receiptForProduction(record,{materialId:'x',quantity:.3,balance:.1,unit:'кг'}).missing,.2);
+assert.equal(receiptForProduction(record,{materialId:'x',quantity:1,balance:0,unit:'кг'},null).returnTo.action.id,'act-1');
+console.log('12 production → receipt → review workflow checks passed');

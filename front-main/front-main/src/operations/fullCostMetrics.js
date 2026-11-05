@@ -7,7 +7,7 @@ function savedParts(p){
  if(packaging===null&&total!==null&&material!==null&&labor!==null&&overhead!==null){const remainder=total-material-labor-overhead;if(remainder>=-.001)packaging=Math.max(0,remainder);}
  // Legacy kg production included all ingredients/packaging in materialCost.
  if(packaging===null&&!p.packId)packaging=0;
- const complete=[material,labor,overhead,packaging].every(n=>n!==null&&n>=0)&&(total===null||Math.abs(total-material-labor-overhead-packaging)<.001);
+ const complete=snapshot.costComplete!==false&&snapshot.historical!==true&&[material,labor,overhead,packaging].every(n=>n!==null&&n>=0)&&(total===null||Math.abs(total-material-labor-overhead-packaging)<.001);
  return {material:material??0,labor:labor??0,overhead:overhead??0,packaging:packaging??0,complete};
 }
 function fullCostMetrics(data,from,to,selected={}){

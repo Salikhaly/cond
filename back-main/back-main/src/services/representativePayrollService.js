@@ -11,13 +11,16 @@ function monthOf(d){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Qyzyl
 async function calculation(b,t){
     const bounds=require('./payrollPeriod')(b.month),user=await User.findByPk(b.userId,{transaction:t});
     if(!user||!['employee','representative'].includes(user.role))throw ApiError.badRequest('Выберите сотрудника');
-    if(!['shipments','payments','margin','profit'].includes(b.mode))throw ApiError.badRequest('Выберите базу процента');
+    if(user.role==='employee'&&Number(b.percent)===0)b={...b,mode:'production'};
+    if(!['shipments','payments','margin','profit','production'].includes(b.mode))throw ApiError.badRequest('Выберите базу процента');
     const fixed=amount(b.fixed,'оклад'),percent=amount(b.percent,'процент');
     if(percent>100)throw ApiError.badRequest('Процент должен быть от 0 до 100');
     const rule=await require('./workPolicyService').at(user.id,new Date(bounds.end.getTime()+5*3600000-86400000).toISOString().slice(0,10),t);if(rule&&!['monthly','monthly_piece'].includes(rule.mode))throw ApiError.badRequest('У сотрудника действует ежедневное правило. Месячный расчёт поверх него не начисляется');
-    if(user.role==='employee'&&(!rule||!['monthly','monthly_piece'].includes(rule.mode)||percent!==0||fixed!==Number(rule.monthlySalary)))throw ApiError.badRequest('Оклад работника берётся из согласованных условий. Выберите месячный оклад, процент — 0');
+    if(user.role==='employee'&&(!rule||!['monthly','monthly_piece'].includes(rule.mode)||fixed!==Number(rule.monthlySalary)))throw ApiError.badRequest('Оклад работника берётся из согласованных условий. Сначала согласуйте месячный оклад');
     if(user.role==='employee'&&rule?.mode==='monthly'&&await M.Production.count({where:{workerId:user.id,status:'posted',date:{[Op.gte]:b.month+'-01',[Op.lt]:new Date(bounds.end.getTime()+5*3600000).toISOString().slice(0,10)},laborCost:{[Op.ne]:0}},transaction:t}))throw ApiError.badRequest('В месяце уже есть сдельные начисления. Согласуйте переход с нового месяца');
     if(['monthly','monthly_piece'].includes(rule?.mode)&&fixed!==Number(rule.monthlySalary))throw ApiError.badRequest('Оклад отличается от согласованных условий. Сначала согласуйте изменение оклада');
+    if(user.role==='employee'&&(b.mode!=='production'||percent!==(rule.mode==='monthly'?Number(rule.percent):0)))throw ApiError.badRequest('Процент работника берётся из согласованных месячных условий и считается от его выпуска');
+    if(user.role==='representative'&&b.mode==='production')throw ApiError.badRequest('Процент от выпуска доступен работникам цеха');
     const orders=await M.Order.findAll({where:{userId:user.id,status:'shipped'},transaction:t});
     const periodOrders=orders.filter(o=>monthOf(o.shippedAt)===b.month);
     const returns=await M.GoodsReturn.findAll({where:{status:'posted',orderId:orders.map(o=>o.id),postedAt:{[Op.gte]:bounds.start,[Op.lt]:bounds.end}},transaction:t});
@@ -26,6 +29,12 @@ async function calculation(b,t){
     if(b.mode==='profit'&&(!note||b.basisConfirmed!==true))throw ApiError.badRequest('Укажите основание и подтвердите фактическую прибыль');
     let basis,source;
     const saleSource={orders:periodOrders.map(o=>({id:o.id,total:Number(o.total)})).sort((a,b)=>a.id.localeCompare(b.id)),returns:returns.map(r=>({id:r.id,total:Number(r.total)})).sort((a,b)=>a.id.localeCompare(b.id))};
+    if(b.mode==='production'){
+        const acts=await M.Production.findAll({where:{workerId:user.id,status:'posted',date:{[Op.gte]:b.month+'-01',[Op.lt]:new Date(bounds.end.getTime()+5*3600000).toISOString().slice(0,10)}},transaction:t});
+        if(percent>0&&acts.some(a=>a.snapshot?.productionValue==null||!Number.isFinite(Number(a.snapshot.productionValue))))throw ApiError.badRequest('В старых актах не сохранена продажная стоимость выпуска. Процент автоматически не рассчитан: оформите согласованную корректировку зарплаты');
+        source={productions:acts.map(a=>({id:a.id,kg:Number(a.kg),value:a.snapshot?.productionValue??null})).sort((a,b)=>a.id.localeCompare(b.id))};
+        basis=money(acts.reduce((sum,a)=>sum+Number(a.snapshot?.productionValue||0),0));
+    }
     if(b.mode==='shipments'){basis=money(sales-returned);source=saleSource;}
     if(b.mode==='margin'){
         const events=await M.CostEvent.findAll({where:{kind:{[Op.in]:['shipment','return-accepted']}},transaction:t}),costs=[];

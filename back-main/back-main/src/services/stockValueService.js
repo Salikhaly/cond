@@ -27,7 +27,7 @@ async function movement(stock, amount, incoming, event, t) {
   return amount;
 }
 async function production(stock,p,calc,t){
-  return movement(stock,{kg:Number(p.kg),knownKg:Number(p.kg),value:Number(calc.totalCost)},true,{id:'production:'+p.id,kind:'production',date:p.date},t);
+  return movement(stock,{kg:Number(p.kg),knownKg:calc.costComplete===false?0:Number(p.kg),value:Number(calc.totalCost)},true,{id:'production:'+p.id,kind:'production',date:p.date},t);
 }
 async function shipment(stock,orderId,kg,t){
   const row=await pool(stock,t);

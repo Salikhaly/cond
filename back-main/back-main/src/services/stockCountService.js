@@ -9,7 +9,8 @@ async function book(line,t,lock=false){
  const options={transaction:t,...(lock?{lock:t.LOCK.UPDATE}:{})};
  if(line.kind==='material'){
   const m=await M.Material.findByPk(line.itemId,options);if(!m||!m.active)fail('Материал недоступен');
-  return {row:m,name:m.name,unit:m.unit,bookQty:Number(m.quantity),unitCost:Number(m.unitCost),retailPrice:null,token:stamp(m.updatedAt)};
+  const known=await require('./materialPriceService').known([m],t);
+  return {row:m,name:m.name,unit:m.unit,bookQty:Number(m.quantity),unitCost:known.has(String(m.id))?Number(m.unitCost):null,retailPrice:null,token:stamp(m.updatedAt)};
  }
  const pack=line.kind==='pack'?await M.ProductPack.findByPk(line.itemId,{transaction:t}):null;
  if(line.kind==='pack'&&(!pack||!pack.active))fail('Фасовка недоступна');
@@ -76,7 +77,7 @@ async function post(u,id,b,outer){
     await current.row.update({kg:actual},{transaction:t});await current.product.update({weightTotal:actual,quantity:Math.floor((actual+1e-8)/Number(current.product.weight))},{transaction:t});
    }else{
     const cost=delta>0&&l.surplusCost!=null?Number(l.surplusCost):Number(current.unitCost);
-    assessment={costDelta:round(delta*cost),costComplete:true};
+    assessment={costDelta:round(delta*cost),costComplete:delta===0||delta>0&&l.surplusCost!=null||current.unitCost!=null};
     const unitCost=delta>0&&actual>0?round((current.bookQty*Number(current.unitCost)+delta*cost)/actual):Number(current.unitCost);
     await current.row.update({quantity:actual,unitCost},{transaction:t});
    }

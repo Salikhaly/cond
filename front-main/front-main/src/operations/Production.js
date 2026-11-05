@@ -1,3 +1,5 @@
+import BackToReport from './BackToReport';
+import {productionPreviewBody,receiptForProduction} from './productionWorkflow';
 import React, { useState, useRef, useEffect } from 'react';
 import { api, fmt, moneyFmt, today } from './api';
 import { Field, Select, Badge, Empty, Table } from './Fields';
@@ -71,7 +73,7 @@ export default function Production({ data, user, run, busy, initialAction, onNav
         if (initialAction?.kind !== 'check-production') return;
         const p = data.productions.find(p => p.id === initialAction.id); if (!p) return;
         let current = true; setPreviewLoading(true); setIntentError(''); setStatus('draft');
-        api('/preview', { productId: p.productId, packId: p.packId, boxes: p.boxes, workerId: p.workerId, date: p.date }).then(calc => { if (current) { setPreview(calc); setPreviewFor(p); } }).catch(e => { if (current) setIntentError(e.message); }).finally(() => { if (current) setPreviewLoading(false); });
+        api('/preview', productionPreviewBody(p)).then(calc => { if (current) { setPreview(calc); setPreviewFor(p); } }).catch(e => { if (current) setIntentError(e.message); }).finally(() => { if (current) setPreviewLoading(false); });
         return () => { current = false; };
     }, [initialAction]);
 
@@ -101,13 +103,14 @@ export default function Production({ data, user, run, busy, initialAction, onNav
     const check = async p => {
         try {
             setPreviewLoading(true); setIntentError('');
-            const calc = await api('/preview', { productId: p.productId, packId: p.packId, boxes: p.boxes || undefined, kg: p.packId ? undefined : p.kg, workerId: p.workerId, date: p.date });
+            const calc = await api('/preview', productionPreviewBody(p));
             setPreview(calc); setPreviewFor(p);
         } catch (e) { setIntentError(e.message); } finally { setPreviewLoading(false); }
     };
 
     if(admin&&tasksOpen)return <><button className="ghost" onClick={()=>setTasksOpen(false)}>← К выпускам</button><ProductionPlan plan={businessPlan(data,today())} setTab={onNavigate}/>{!businessPlan(data,today()).rows.length&&<Empty>Нет заявок на производство.</Empty>}</>;
     return <>
+        <BackToReport action={initialAction} onNavigate={onNavigate}/>
         {initialAction?.returnDay&&<button className="ghost" onClick={()=>onNavigate?.('payroll',{kind:'work-day',...initialAction.returnDay})}>← К дню сотрудника</button>}
         {!admin&&data.canViewProductionOrders&&<section className="op-card"><button type="button" className="secondary" aria-expanded={tasksOpen} onClick={()=>setTasksOpen(v=>!v)}>Что готовить · {(data.productionTasks||[]).filter(t=>t.toMake>0).length}</button>{tasksOpen&&<><h2>План по заявкам</h2>{!(data.productionTasks||[]).length&&<Empty>Нет заявок на производство</Empty>}{(data.productionTasks||[]).map(task=>{const product=data.products.find(p=>p.id===task.productId),pack=product?.packs?.find(p=>p.id===task.packId);return <article className="op-review-panel" key={task.key}><h3>{product?.name||'Товар'}{pack?' · '+fmt(pack.capacityKg)+' кг':''}</h3><p>{task.pendingOrders>0?'Есть заявки на согласовании · ':'Согласовано · '}К {task.deliveryDate} · Нужно {fmt(task.packId?task.boxes:task.kg)} {task.unit} · На складе {fmt(task.inStock)}</p><strong>{task.toMake>0?'Осталось изготовить '+fmt(task.toMake)+' '+task.unit:'Есть на складе'}</strong>{task.packId&&task.toMake>0&&<button type="button" disabled={busy} onClick={()=>{if(form.boxes&&(Number(form.productId)!==task.productId||form.packId!==task.packId)){setDraftTarget({...task,date:today()});return;}setForm(f=>({...f,productId:String(task.productId),packId:task.packId,boxes:'',date:today()}));setAdding(true);setTasksOpen(false);}}>Записать выпуск</button>}</article>;})}<p className="op-muted">Задания общие для цеха. Записывайте только свой фактический выпуск. Склад изменится после проверки администратором.</p></>}</section>}
         {dateFilter&&<div className="op-plan-context">Акты за {dateFilter}<button className="ghost" onClick={()=>setDateFilter('')}>Все даты</button></div>}
@@ -133,7 +136,7 @@ export default function Production({ data, user, run, busy, initialAction, onNav
                     <Field label="Количество коробок" type="number" min="1" step="1" required value={form.boxes} onChange={e => change('boxes', e.target.value)} />
                     <Field label="Дата" type="date" max={today()} required value={form.date} onChange={e => change('date', e.target.value)} />
                 </div>
-                {selectedPack && Number(form.boxes) > 0 && <p className="op-plan-context">{fmt(form.boxes)} {boxWord(form.boxes)} × {fmt(selectedPack.capacityKg)} кг = <b>{fmt(Number(form.boxes) * Number(selectedPack.capacityKg))} кг</b> сырья к списанию. На склад: <b>{fmt(form.boxes)} {boxWord(form.boxes)}</b>.</p>}
+                {selectedPack && Number(form.boxes) > 0 && <p className="op-plan-context">{fmt(form.boxes)} {boxWord(form.boxes)} × {fmt(selectedPack.capacityKg)} кг = <b>{fmt(Number(form.boxes) * Number(selectedPack.capacityKg))} кг</b> готового товара. На склад: <b>{fmt(form.boxes)} {boxWord(form.boxes)}</b>.</p>}
                 {late && <><p className="op-plan-context">Прошлую дату подтвердит администратор.</p><Field label="Причина" required maxLength={2000} value={form.reason || ''} onChange={e => change('reason', e.target.value)} /></>}
                 {!admin && selectedPack && <p className="op-muted">{['piece','monthly_piece'].includes(selectedProduct?.wageMode) ? 'Оплата за коробку: ' + moneyFmt(selectedPack.payPerBox || 0) + ' ₸' : 'Оплата по вашим условиям — в разделе «Моя зарплата»'}</p>}
                 <button disabled={busy}>{late ? 'Отправить запрос' : 'Записать'}</button>
@@ -141,10 +144,12 @@ export default function Production({ data, user, run, busy, initialAction, onNav
         </section>}
         {preview && <section ref={previewRef} className="op-card op-preview"><div className="op-section-heading"><h2>{previewFor?.status === 'posted' ? 'Сохранённая калькуляция' : 'Калькуляция перед проведением'}</h2><button className="ghost" aria-label="Закрыть калькуляцию" onClick={() => { setPreview(null); setPreviewFor(null); }}>×</button></div>
             <p>{preview.productName} · {preview.boxes ? <><b>{fmt(preview.boxes)} {boxWord(preview.boxes)}</b> × {fmt(preview.capacityKg)} кг</> : <>{fmt(preview.kg)} кг</>} · версия рецептуры {preview.recipeVersion}</p>
-            <Table mobileCards headers={['Материал', 'Списание', 'Цена', 'Стоимость', 'Проверка']}>
-                {[...(preview.lines || []), ...(preview.packagingLines || [])].map(l => <tr key={l.materialId}><td>{l.name}</td><td>{fmt(l.quantity)} {l.unit}</td><td>{moneyFmt(l.unitCost)} ₸</td><td>{moneyFmt(l.cost)} ₸</td><td>{previewFor?.status === 'posted' ? 'Списано' : l.enough ? 'Хватает' : `Не хватает ${fmt(Math.max(0, Number(l.quantity) - Number(l.balance)))} ${l.unit}`}</td></tr>)}
-            </Table>
-            <div className="op-costs"><span>Сырьё <b>{moneyFmt(preview.materialCost)} ₸</b></span><span>Коробки и плёнка <b>{moneyFmt(preview.packagingCost || 0)} ₸</b></span><span>Работнику <b>{moneyFmt(preview.laborCost)} ₸</b></span><span>Прочее <b>{moneyFmt(preview.overheadCost)} ₸</b></span><strong>Всего <b>{moneyFmt(preview.totalCost)} ₸</b></strong>{preview.costPerBox != null && <strong>Себестоимость коробки <b>{moneyFmt(preview.costPerBox)} ₸</b></strong>}</div>
+            {previewFor?.status==='draft'&&!preview.enough&&<div className="cond-production-shortages"><h3>Не хватает на складе</h3>{[...(preview.lines||[]),...(preview.packagingLines||[])].filter(l=>!l.enough).map(l=><article className="cond-production-shortage" key={l.materialId}><div><b>{l.name}</b><span>Нужно ещё {fmt(Math.max(0,Number(l.quantity)-Number(l.balance)))} {l.unit}</span></div>{onNavigate&&<button className="secondary" type="button" disabled={busy} onClick={()=>onNavigate('materials',receiptForProduction(previewFor,l,initialAction))}>Оформить приход</button>}</article>)}</div>}
+            <details className="op-help"><summary>Расход материалов · {(preview.lines||[]).length+(preview.packagingLines||[]).length} позиций</summary><Table mobileCards headers={['Материал', 'Списание', 'Цена', 'Стоимость', 'Проверка']}>
+                {[...(preview.lines || []), ...(preview.packagingLines || [])].map(l => <tr key={l.materialId}><td>{l.name}</td><td>{fmt(l.quantity)} {l.unit}</td><td>{l.costKnown===false?'Цена не указана':moneyFmt(l.unitCost)+' ₸'}</td><td>{l.costKnown===false?'—':moneyFmt(l.cost)+' ₸'}</td><td>{previewFor?.status === 'posted' ? 'Списано' : l.enough ? 'Хватает' : `Не хватает ${fmt(Math.max(0, Number(l.quantity) - Number(l.balance)))} ${l.unit}`}</td></tr>)}
+            </Table></details>
+            <div className="op-costs"><span>Сырьё <b>{moneyFmt(preview.materialCost)} ₸</b></span><span>Коробки и плёнка <b>{moneyFmt(preview.packagingCost || 0)} ₸</b></span><span>Работнику <b>{moneyFmt(preview.laborCost)} ₸</b></span><span>Прочее <b>{moneyFmt(preview.overheadCost)} ₸</b></span><strong>{preview.costComplete===false?'Известная часть затрат':'Всего'} <b>{moneyFmt(preview.totalCost)} ₸</b></strong>{preview.costPerBox != null && <strong>{preview.costComplete===false?'Известно на коробку':'Себестоимость коробки'} <b>{moneyFmt(preview.costPerBox)} ₸</b></strong>}</div>
+            {preview.costComplete===false&&<p className="op-plan-context">Цена ещё не подтверждена: {[...(preview.lines||[]),...(preview.packagingLines||[])].filter(l=>l.costKnown===false).map(l=>l.name).join(', ')}. В отчёте стоимость останется неполной.</p>}
             {previewFor?.status === 'draft' && <><p className="op-muted">Спишет сырьё, коробки и плёнку, начислит зарплату и добавит коробки на склад.</p><button disabled={busy || !preview.enough} onClick={() => run(async () => { await api(`/productions/${previewFor.id}/post`, { expectedCalculation: preview }); setPreview(null); setPreviewFor(null); }, 'Выпуск проведён: коробки на складе, зарплата начислена')}>Подтвердить</button></>}
         </section>}
         <WageRequests data={data} user={user} run={run} busy={busy} type="late_production" onNavigate={onNavigate} />

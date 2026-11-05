@@ -1,6 +1,6 @@
 const {day}=require('./overviewMetrics'),{payrollMetrics}=require('./payrollMetrics');
 const money=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
-const policyLabels={piece:'По изготовленным кг',shift:'Фиксированная смена',sales:'Процент от продаж',margin:'Процент от маржи',custom:'Ручные согласованные начисления',monthly:'Месячный оклад и процент',monthly_piece:'Оклад + выработка'};
+const policyLabels={piece:'По изготовленным кг',shift:'Фиксированная смена',sales:'Процент от продаж',margin:'Процент от маржи',custom:'Ручные согласованные начисления',monthly:'Месячный оклад',monthly_piece:'Оклад + выработка'};
 function staffDayStatus(data,userId,date){
  const rows=(data.productions||[]).filter(p=>String(p.workerId)===String(userId)&&p.date===date);
  const posted=rows.filter(p=>p.status==='posted'&&!p._pending&&!p._posting),drafts=rows.filter(p=>p.status==='draft'),waiting=drafts.filter(p=>!p._pending);

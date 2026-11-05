@@ -1,3 +1,4 @@
+import {knownMaterialPrices} from '../../../../back-main/back-main/src/domain/materialPriceEvidence';
 import { cached, remember, canQueue, enqueue, queued, removeQueued, saveQueued, readCache, writeCache, projectDashboard } from './offline';
 import { calculationEstimate } from './calculationEstimate';
 let refreshing;
@@ -80,7 +81,8 @@ async function offlineCalculation(body) {
     if(!rate&&Number(policy?.boxRate)>0)throw new Error('Ставка за коробку проверяется сервером. Выпуск можно сохранить на телефоне для отправки позже');
     const calc=calculationEstimate({recipe,materials:d.materials,packKg:product.packKg,laborPerPack:rate&&product.packKg?Number(rate.rate)*(rate.unit==='pack'?1:Number(product.packKg)):product.packLaborPerPack,ratePerKg:rate?Number(rate.rate)/(rate.unit==='pack'?Number(product.packKg):1):product.priceForEmployee,kg,workMode:policy?.mode||'piece'});
     if(calc.tooSmall)throw new Error('Слишком малый выпуск для точности учёта');
-    return {...calc,productId:product.id,productName:product.name,_offline:true};
+    const known=knownMaterialPrices(d.materials,d.receipts,d.receiptDocuments,d.receiptCorrections,d.stockCounts),lines=calc.lines.map(l=>({...l,costKnown:known.has(String(l.materialId))}));
+    return {...calc,lines,costComplete:lines.every(l=>l.costKnown),productId:product.id,productName:product.name,_offline:true};
 }
 export const api = (path, body, method, operationId) => request('/operations' + path, body, method, operationId);
 export const fmt = value => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 4 }).format(Number(value || 0));
