@@ -52,8 +52,8 @@ async function main(){
  check(c.sales===6000&&c.paid===1500&&c.debt===4500&&c.documents.length===2,'Two shops share customer balance when company accounting is selected');
  await cash(2500,[[o1.id,2500]]);const advance=await cash(3000,[[o2.id,2000]]);c=(await fin.visible(admin)).clients.find(c=>c.customerId===shop.customerId);
  check(c.debt===0&&c.advance===1000,'Customer overpayment is a separate advance rather than negative debt');
- const o3=await ship(shop.id,1);await fin.allocate(admin,advance.id,{allocations:[{documentId:o3.id,amount:1000}]});c=(await fin.visible(admin)).clients.find(c=>c.customerId===shop.customerId);
- check(c.debt===1000&&c.documents.find(d=>d.id===o3.id).due===1000,'Earlier unallocated advance can settle a later shipment without receiving money again');
+ const o3=await ship(shop.id,1);await assert.rejects(()=>fin.allocate(admin,advance.id,{allocations:[{documentId:o3.id,amount:1000}]}));c=(await fin.visible(admin)).clients.find(c=>c.customerId===shop.customerId);
+ check(c.debt===1000&&c.documents.find(d=>d.id===o3.id).due===1000,'Earlier advance automatically settles later shipment; repeated allocation is rejected');
  await fin.reverse(admin,c1.id,{date,reason:'Ошибочно записано получение'});c=(await fin.visible(admin)).clients.find(c=>c.customerId===shop.customerId);
  check(c.debt===2500&&c.documents.find(d=>d.id===o1.id).due===1500,'Customer payment reversal restores both account and invoice balance');
  const r=await returns.create(firm,{orderId:o1.id,contactName:'Тест',reason:'Корректировка долга',preferredSettlement:'debt',lines:[{productId:product.id,kg:.5}],replacements:[]});await returns.post(admin,r.id,{received:true,decisions:[{productId:product.id,kind:'inspection'}]});await returns.settle(admin,r.id,{kind:'debt',amount:1000,confirmed:true,reference:'Уменьшить долг по возврату'});

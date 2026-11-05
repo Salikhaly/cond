@@ -1,3 +1,4 @@
+import GoodsBonus from './GoodsBonus';
 import React,{useEffect,useState,useRef} from 'react';
 import {api,today,moneyFmt} from './api';
 import {Field,Table,Empty} from './Fields';
@@ -29,14 +30,6 @@ function SupplierPriceEditor({party,data,run,busy,onSaved}){
   },'Индивидуальная цена сохранена');
  };
  return <details className="op-help"><summary>Индивидуальные цены · {prices.filter(row=>String(row.supplierId)===String(party.id)).length}</summary><p className="op-muted">Цена за 1 единицу материала. Подставится в приход и в расчёт.</p><Table mobileCards headers={['Материал','Цена за 1 ед., ₸']}>{materials.map(material=>{const row=priceFor(material.id);return <tr key={material.id}><td>{material.name}<small className="op-cell-detail">{material.unit}</small></td><td><input aria-label={'Цена поставщика: '+material.name} type="number" min="0" step="0.01" defaultValue={row?.pricePerUnit??''} disabled={busy||saving===material.id} onBlur={e=>{if(Number(e.target.value)!==Number(row?.pricePerUnit))save(material,e.target.value)}} /> ₸</td></tr>})}</Table></details>;
-}
-function ClientBonusEditor({party,data,run,busy,onSaved}){
- const [form,setForm]=useState({amount:'',reason:'',kind:'accrual',date:today()});
- const rows=(data.clientBonuses||[]).filter(row=>String(row.customerId)===String(party.customerId));
- const balance=rows.reduce((sum,row)=>sum+(row.kind==='accrual'?Number(row.amount):-Number(row.amount)),0);
- if(!party.customerId)return null;
- const save=e=>{e.preventDefault();run(async()=>{await api('/client-bonuses',{...form,customerId:party.customerId});setForm({amount:'',reason:'',kind:'accrual',date:today()});await onSaved();},'Бонус клиента сохранён');};
- return <details className="op-help"><summary>Бонусы клиента · {moneyFmt(balance)} ₸</summary><p className="op-muted">Бонусный баланс клиента. Начисление увеличивает, списание уменьшает. Учитывается в отчёте по клиентам.</p><form onSubmit={save}><div className="op-form-grid"><Field label="Сумма, ₸" type="number" min="0.01" step="0.01" required value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/><Field label="Дата" type="date" required value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/><Field label="Действие"><select value={form.kind} onChange={e=>setForm(f=>({...f,kind:e.target.value}))}><option value="accrual">Начислить бонус</option><option value="spent">Списать бонус</option></select></Field></div><Field label="Причина" required maxLength={2000} value={form.reason} onChange={e=>setForm(f=>({...f,reason:e.target.value}))}/><button className="secondary" disabled={busy}>Сохранить бонус</button></form>{rows.length>0&&<Table mobileCards headers={['Дата','Операция','Сумма','Причина']}>{rows.slice(0,10).map(row=><tr key={row.id}><td>{row.date}</td><td>{row.kind==='accrual'?'Начисление':'Списание'}</td><td>{row.kind==='accrual'?'+':'−'}{moneyFmt(row.amount)} ₸</td><td>{row.reason}</td></tr>)}</Table>}</details>;
 }
 function PaymentForm({data,party,supplier,run,busy,onSaved,entries,allocations}){
     const [form,setForm]=useState({amount:'',date:today(),method:'cash',comment:'',rows:{}}),[existing,setExisting]=useState('');
@@ -83,7 +76,7 @@ export default function TradeLedger({supplier=false,run,busy,data,initialAction,
     const title=supplier?'Поставщики и оплаты':'Клиенты и оплаты';
     if(act&&party)return <ReconciliationAct party={party} entries={ledger?.entries||[]} supplier={supplier} returns={(data.returns||[]).filter(row=>row.customer?.company===party.name||row.customer?.destination?.outletName===party.name)} onClose={()=>setAct(false)} />;
     if(party)return <section className="op-card">{ledger?._offline&&<p className="op-plan-context">Сохранённая копия расчётов. Новые оплаты учитываются только после подтверждения сервера.</p>}<button className="ghost" onClick={()=>setSelected('')}>← {supplier?'К поставщикам':'К клиентам'}</button><div className="op-section-heading"><div><h2>{party.name}</h2>{(party.contact||party.phone)&&<p className="op-muted">{party.contact} {party.phone}</p>}</div><div className="op-actions"><button className="secondary" onClick={()=>setAct(true)}>Акт сверки</button><button className="secondary" disabled={busy} onClick={load}>Обновить</button></div></div>{error&&<p className="op-missing">{error}</p>}<div className="op-costs"><span>{supplier?'Закуплено':'Отгружено'} <b>{moneyFmt(supplier?party.purchases:party.sales)} ₸</b></span><span>Оплачено <b>{moneyFmt(party.paid)} ₸</b></span><strong>Долг <b>{moneyFmt(supplier?party.debt:party.debt)} ₸</b></strong>{party.advance>0&&<span>Аванс клиента <b>{moneyFmt(party.advance)} ₸</b></span>}{party.adjustments>0&&<span>Зачтено по возвратам <b>{moneyFmt(party.adjustments)} ₸</b></span>}</div>
-    {!supplier&&<ClientBonusEditor key={'bonus:'+party.key} party={party} data={data} run={run} busy={busy} onSaved={load}/>}
+    {!supplier&&data.permissions?.orders!==false&&<GoodsBonus key={'bonus:'+party.key} party={party} data={data} run={run} busy={busy} onSaved={load}/>}
     {supplier&&<SupplierContacts key={party.id} party={party} run={run} busy={busy} onSaved={load}/>}
     {supplier&&<SupplierPriceEditor key={'prices:'+party.id} party={party} data={data} run={run} busy={busy} onSaved={load}/>}
     <details className="op-ledger-documents"><summary>Документы · {party.documents.length}</summary><Table mobileCards headers={['Документ','Дата','Сумма','Оплачено','Остаток']}>{party.documents.map(d=><tr key={d.id}><td>{d.document||'№ '+d.id.slice(0,8).toUpperCase()}

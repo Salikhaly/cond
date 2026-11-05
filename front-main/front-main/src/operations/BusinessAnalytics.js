@@ -98,9 +98,10 @@ export default function BusinessAnalytics({ data }) {
         }
         const bonuses = new Map();
         for (const item of data.clientBonuses || []) {
+            if(item.kind!=='goods'||item.date<from||item.date>to)continue;
             const customer = data.customers?.find(row => String(row.id) === String(item.customerId));
             const key = customer?.name || 'Клиент';
-            bonuses.set(key, money((bonuses.get(key) || 0) + (item.kind === 'accrual' ? Number(item.amount) : -Number(item.amount))));
+            bonuses.set(key, money((bonuses.get(key) || 0) + Number(item.goods?.knownCost||0)));
         }
         return {
             revenue: money(revenue), cost: money(cost), margin: money(revenue - cost), unknown,
@@ -119,6 +120,6 @@ export default function BusinessAnalytics({ data }) {
         <section className="op-card"><h2>ABC-анализ товаров</h2><p className="op-muted">A — 80% выручки, B — следующие 15%, C — остальные.</p><Table mobileCards headers={['Группа','Товар','Выручка','Доля накопительно']}>{view.abc.map(row => <tr key={row.key}><td><b>{row.group}</b></td><td>{row.name}</td><td>{moneyFmt(row.revenue)}</td><td>{fmt(row.share)}%</td></tr>)}</Table></section>
         <section className="op-card"><h2>План / факт производства</h2><Table mobileCards headers={['Товар','План, коробок','Факт, коробок','Отклонение']}>{view.plan.map(row => <tr key={row.key}><td>{row.name}</td><td>{fmt(row.plan)}</td><td>{fmt(row.fact)}</td><td className={row.delta < 0 ? 'op-margin-alert' : ''}>{row.delta > 0 ? '+' : ''}{fmt(row.delta)}</td></tr>)}</Table>{!view.plan.length && <Empty>Нет заявок и выпусков.</Empty>}</section>
         <section className="op-card"><h2>Потери и причины возвратов</h2><Table mobileCards headers={['Причина','Возвратов','Кг','Сумма']}>{view.lossByReason.map(row => <tr key={row.reason}><td>{row.reason}</td><td>{row.count}</td><td>{fmt(row.kg)}</td><td>{moneyFmt(row.amount)} ₸</td></tr>)}</Table>{!view.lossByReason.length && <Empty>Возвратов нет.</Empty>}</section>
-        <section className="op-card"><h2>Бонусы клиентов</h2><Table mobileCards headers={['Клиент','Бонусный баланс']}>{view.bonuses.map(([name, amount]) => <tr key={name}><td>{name}</td><td>{moneyFmt(amount)} ₸</td></tr>)}</Table>{!view.bonuses.length && <Empty>Бонусов пока нет.</Empty>}</section>
+        <section className="op-card"><h2>Бонусы клиентов</h2><Table mobileCards headers={['Клиент','Себестоимость бонусных товаров']}>{view.bonuses.map(([name, amount]) => <tr key={name}><td>{name}</td><td>{moneyFmt(amount)} ₸</td></tr>)}</Table>{!view.bonuses.length && <Empty>Бонусов пока нет.</Empty>}</section>
     </>;
 }

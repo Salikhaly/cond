@@ -548,6 +548,7 @@ module.exports = {
                 await o.update({ lines, total: money(lines.reduce((s, l) => s + lineTotal(l), 0)) }, { transaction: t });
             }
             if (b.status==='shipped' || b.status==='cancelled'&&o.status==='approved') {
+                const valuedProducts = new Set();
                 for (const l of [...o.lines].sort((a, b) => a.productId - b.productId)) {
                     const product = required(await Product.findByPk(l.productId, { transaction: t, lock: t.LOCK.UPDATE }), 'Товар');
                     const stock = required(await M.Stock.findByPk(l.productId, { transaction: t, lock: t.LOCK.UPDATE }), 'Остаток');
@@ -560,10 +561,14 @@ module.exports = {
                         if(b.status==='shipped')await packStock.decrement('boxes',{by:Number(l.boxes),transaction:t});
                     }
                     if (b.status === 'shipped') {
-                        await require('./stockValueService').shipment(stock,o.id,Number(l.kg),t);
+                        if (!valuedProducts.has(l.productId)) {
+                            const totalKg = round(o.lines.filter(line=>line.productId===l.productId).reduce((sum,line)=>sum+Number(line.kg),0));
+                            await require('./stockValueService').shipment(stock,o.id,totalKg,t);
+                            valuedProducts.add(l.productId);
+                        }
                         await stock.decrement('kg', { by: l.kg, transaction: t });
                         await stock.reload({ transaction: t });
-                        const capacity = l.packId ? Number(l.capacityKg) : Number(product.weight);
+                        const capacity = Number(product.weight);
                         await product.update({ weightTotal: stock.kg, quantity: Math.floor(Number(stock.kg) / capacity) }, { transaction: t });
                         const [relation] = await BusinessRelation.findOrCreate({ where: { name: o.company, category: 'clients' }, transaction: t });
                         const income = await Income.create({ businessRelationId: relation.id, productId: product.id, weight: l.packId?Number(l.capacityKg):product.weight, totalWeight: l.kg, quantity: l.packId?Number(l.boxes):round(l.kg / Number(product.weight)), unitPrice: l.price, totalAmount: lineTotal(l), packId:l.packId||null, boxes:l.packId?Number(l.boxes):null, unit:l.packId?'box':'kg', date: new Date() }, { transaction: t });

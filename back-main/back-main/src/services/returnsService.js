@@ -59,6 +59,14 @@ const event = (u, r, action, before, after, reason = '', t) => M.ReturnEvent.cre
   transaction: t
 });
 const snapshot = r => JSON.parse(JSON.stringify(r));
+// Returns are entered in kg; box prices must be converted before calculating a refund.
+function soldProduct(order,productId){
+  const lines=order.lines.filter(l=>l.productId===Number(productId));
+  if(!lines.length)return null;
+  const kg=round(lines.reduce((sum,l)=>sum+Number(l.kg),0));
+  const total=money(lines.reduce((sum,l)=>sum+money(Number(l.price)*(l.packId?Number(l.boxes):Number(l.kg))),0));
+  return {...lines[0],kg,price:kg>0?total/kg:0};
+}
 async function orderFor(u, id, t) {
   staff(u);
   const order = required(await get(M.Order, id, t), 'Отгрузка');
@@ -232,7 +240,7 @@ module.exports = {
         transaction: t
       });
       const lines = b.lines.map(l => {
-        const original = order.lines.find(p => p.productId === Number(l.productId));
+        const original = soldProduct(order,l.productId);
         if (!original) fail('Товара нет в исходной накладной');
         const kg = qty(l.kg),
           returned = posted.reduce((s, r) => s + r.lines.filter(x => x.productId === original.productId).reduce((a, x) => a + x.kg, 0), 0);
@@ -313,7 +321,7 @@ module.exports = {
           transaction: t
         });
       for (const line of r.lines) {
-        const sold = original.lines.find(l => l.productId === line.productId);
+        const sold = soldProduct(original,line.productId);
         const returned = posted.reduce((s, d) => s + d.lines.filter(l => l.productId === line.productId).reduce((a, l) => a + l.kg, 0), 0);
         if (!sold || round(returned + line.kg) > Number(sold.kg) + .00001) fail('По этой накладной уже оформлен возврат: ' + line.name);
         const alreadyAmount = posted.reduce((s, d) => s + d.lines.filter(l => l.productId === line.productId).reduce((a, l) => a + Number(l.amount), 0), 0);

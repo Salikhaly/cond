@@ -54,7 +54,7 @@ function summarize(d,now=new Date()){
     }
     const clients=[...groups.values()].map(g=>({...g,debt:money(Math.max(0,(g.opening||0)+g.sales-g.adjustments-g.paid)),advance:money(Math.max(0,g.paid+g.adjustments-g.sales-(g.opening||0)))}));
     const suppliers=d.suppliers.map(s=>{
-        const documents=d.receipts.filter(r=>r.supplier===s.name).map(r=>({...r,paidAmount:documentPaid(d,'receipt',r.id)})).map(r=>({...r,debt:money(Math.max(0,Number(r.total)-r.paidAmount))}));
+        const documents=d.receipts.filter(r=>r.supplier===s.name).map(r=>({...r,basePaid:Number(d.receiptFinance.find(f=>f.receiptId===r.id)?.basePaid ?? (r.paid?Number(r.total):0)),paidAmount:documentPaid(d,'receipt',r.id)})).map(r=>({...r,debt:money(Math.max(0,Number(r.total)-r.paidAmount))}));
         const purchases=money(documents.reduce((n,r)=>n+Number(r.total),0)),paid=money(documents.reduce((n,r)=>n+r.paidAmount,0));
         return {...s,key:'supplier:'+s.id,documents,purchases,paid,debt:money(purchases-paid)};
     });

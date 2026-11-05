@@ -1,3 +1,4 @@
+import BackToReport from './BackToReport';
 import AccountPicker from './AccountPicker';
 import React, { useState, useEffect } from 'react';
 import { api, fmt, moneyFmt } from './api';
@@ -206,7 +207,8 @@ export default function Returns({
   user,
   run,
   busy,
-  initialAction
+  initialAction,
+  onNavigate
 }) {
   const admin = user.role === 'super_admin',canCash=admin&&data.permissions?.cash!==false,
     online = !data._offline && navigator.onLine && !data.sync?.readOnly;
@@ -220,6 +222,7 @@ export default function Returns({
     replacements: []
   };
   const [form, setForm, stored] = useDraft('goods-return', initial);
+  const [focusId,setFocusId]=useState(initialAction?.kind==='return-document'?initialAction.id:null);
   const [adding, setAdding] = useState(initialAction?.kind === 'return'),
     [exchange, setExchangeState] = useState(Boolean(form.exchange)),
     [filter, setFilter] = useState(admin ? 'requested' : 'all'),
@@ -235,6 +238,7 @@ export default function Returns({
     }));
   };
   useEffect(() => {
+    if(initialAction?.kind==='return-document'){setFocusId(initialAction.id);setAdding(false);}
     if (initialAction?.kind === 'return') {
       setAdding(true);
       if (form.orderId && form.orderId !== initialAction.orderId && (form.reason || Object.values(form.quantities).some(v => Number(v) > 0))) setTarget(initialAction.orderId);else if (form.orderId !== initialAction.orderId) {
@@ -258,6 +262,8 @@ export default function Returns({
   const reasonRows=[...returns.filter(r=>r.status==='posted').reduce((map,r)=>{const key=(r.reason||'Без причины').trim();const row=map.get(key)||{reason:key,count:0,amount:0,kg:0};row.count+=1;row.amount+=Number(r.total||0);row.kg+=(r.lines||[]).reduce((s,l)=>s+Number(l.kg||0),0);map.set(key,row);return map;},new Map()).values()].sort((a,b)=>b.amount-a.amount);
   if (filter === 'posted') rows.sort((a, b) => String(b.postedAt || b.createdAt).localeCompare(String(a.postedAt || a.createdAt)));
   const remain = l => Math.max(0, l.kg - posted.filter(r => r.orderId === source.id).reduce((s, r) => s + r.lines.filter(x => x.productId === l.productId).reduce((a, x) => a + x.kg, 0), 0));
+  const focusedReturn=returns.find(r=>r.id===focusId);
+  if(focusedReturn&&!print)return <><BackToReport action={initialAction} onNavigate={onNavigate}/><button className="ghost" onClick={()=>setFocusId(null)}>← Все возвраты</button><ReturnCard r={focusedReturn} data={data} user={user} run={run} busy={busy} online={online} onSaved={()=>{}} onPrint={setPrint}/></>;
   if (print) return <section className="op-card op-print-document"><div className="op-actions op-no-print"><button onClick={() => window.print()}>Печать / PDF</button><button className="secondary" onClick={() => setPrint(null)}>Назад</button></div><h2>Акт {print.replacements?.length ? 'обмена' : 'возврата'} № {print.id.slice(0, 8).toUpperCase()}</h2><p>{print.customer?.company} · {print.customer?.destination?.outletName}</p><p>По накладной № {print.orderId.slice(0, 8).toUpperCase()} · принят {stamp(print.postedAt)}</p><p>Клиент: {print.contactName}. Причина: {print.reason}</p><Table headers={['Товар', 'Кг', 'Цена, ₸', 'Сумма, ₸']}>{print.lines.map(l => <tr key={l.productId}><td>{l.name}</td><td>{fmt(l.kg)}</td><td>{money(l.price)}</td><td>{money(l.amount)}</td></tr>)}</Table><p>Итого: {money(print.total)}</p><p>Принял: {print.postedByName}</p><p>Подтверждено расчётов: {money(sum(print.settlements || [], 'amount'))}</p><p>Клиент __________ · Принял __________</p></section>;
   return <><section className="op-card op-module-heading"><div className="op-section-heading"><div><p className="op-muted">Запрос → приём товара → решение и расчёт.</p></div>{!adding && <div className="op-actions"><button onClick={() => {
             setAdding(true);

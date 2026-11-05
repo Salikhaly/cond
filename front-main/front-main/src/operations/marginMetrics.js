@@ -7,8 +7,8 @@ function marginMetrics(data,from='',to=''){
  const sales=[...(data.incomes||[]),...returnSales(data)].filter(s=>within(s.date));
  const rows=sales.map(s=>{
   const e=events.find(e=>e.id===(s.isReturn?`return:${s.returnId}:${s.productId}`:`shipment:${s.orderId}:${s.productId}`));
-  const kg=Math.abs(n(s.totalWeight)),knownKg=Math.min(kg,n(e?.knownKg)),sign=s.isReturn?-1:1;
-  return {id:s.id,date:day(s.date),name:s.product?.name||products.find(p=>String(p.id)===String(s.productId))?.name||'Товар',client:s.destination?.outletName||s.business_relation?.name||'Клиент',productId:s.productId,kg:sign*kg,revenue:n(s.totalAmount),knownCost:sign*n(e?.value),unknownKg:Math.max(0,kg-knownKg),complete:!!e&&kg-knownKg<.00011,orderId:s.orderId||null,isReturn:!!s.isReturn};
+  const kg=Math.abs(n(s.totalWeight)),share=e&&n(e.kg)>0?Math.min(1,kg/n(e.kg)):0,knownKg=Math.min(kg,n(e?.knownKg)*share),sign=s.isReturn?-1:1;
+  return {id:s.id,date:day(s.date),name:s.product?.name||products.find(p=>String(p.id)===String(s.productId))?.name||'Товар',client:s.destination?.outletName||s.business_relation?.name||'Клиент',productId:s.productId,kg:sign*kg,revenue:n(s.totalAmount),knownCost:sign*n(e?.value)*share,unknownKg:Math.max(0,kg-knownKg),complete:!!e&&kg-knownKg<.00011,orderId:s.orderId||null,returnId:s.returnId||null,isReturn:!!s.isReturn};
  });
  const complete=rows.every(r=>r.complete),revenue=rows.reduce((s,r)=>s+r.revenue,0),knownCost=rows.reduce((s,r)=>s+r.knownCost,0),unknownKg=rows.reduce((s,r)=>s+r.unknownKg,0);
  const scraps=events.filter(e=>e.kind==='return-scrap'&&within(e.date));

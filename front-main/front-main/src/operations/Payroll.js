@@ -1,3 +1,4 @@
+import BackToReport from './BackToReport';
 import React, { useState, useRef, useEffect } from 'react';
 import { api, fmt, moneyFmt, today } from './api';
 import { Field, Table, Empty } from './Fields';
@@ -49,6 +50,7 @@ export default function Payroll({ data, user, run, busy, onNavigate,initialActio
         : (data.productions||[]).filter(p=>p.status==='posted'&&Number(p.workerId)===Number(worker?.id)&&(!month||monthOf(p.date)===month)).reduce((sum,p)=>sum+Number(p.boxes||0),0);
     if(slip&&selected&&worker)return <PayrollSlip data={data} person={worker} month={month} onClose={()=>setSlip(false)}/>;
     return <>
+        <BackToReport action={initialAction} onNavigate={onNavigate}/>
         <section className="op-card">{admin&&!selected&&<h2>Команда</h2>}{selected&&worker&&<>{admin&&<button className="ghost" onClick={()=>setSelected('')}>← К сотрудникам</button>}<div className="ux-person-header"><span className="op-person-avatar">{profile.photo?<img src={profile.photo} alt=""/>:initials(worker.name)}</span><div><h2>{worker.name}</h2><small>{profile.position||(worker.role==='representative'?'Торговый представитель':'Производство')}</small>{profile.phone&&<div><a href={'tel:'+profile.phone.replace(/[^+0-9]/g,'')}>Позвонить</a></div>}</div></div></>}
             <div className="op-form-grid"><Field label="Месяц зарплаты"><select aria-label="Месяц зарплаты" value={month} onChange={e=>{setMonth(e.target.value);setConfirm(false);setOverApproved(false);}}>{months.map(key=><option key={key} value={key}>{monthLabel(key)}</option>)}</select></Field></div>
             {selected&&worker&&admin&&<div className="op-actions">{data.permissions?.cash!==false&&<button onClick={()=>onNavigate('expenses',{kind:'advance',workerId:worker.id})}>Выдать аванс</button>}<details className="op-help"><summary>Другие действия</summary><button className="secondary" onClick={()=>setSlip(true)}>Расчётный лист</button><button className="secondary" onClick={()=>setRequest({type:'adjustment',date:today()})}>Премия / удержание</button></details></div>}

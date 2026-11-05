@@ -1,27 +1,25 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Reports from './Reports';
+import Money from './Money';
 import CashFlow from './CashFlow';
 import BusinessAnalytics from './BusinessAnalytics';
 import Expenses from './Expenses';
 import {returnSales} from './returnMetrics';
-import { api, fmt, moneyFmt, today } from './api';
+import { fmt, moneyFmt } from './api';
 import { Field, Table, Empty } from './Fields';
-import useDraft, { DraftNote } from './useDraft';
 export default function Finance({data,run,busy,onNavigate,initialAction}) {
-    const [screen,setScreen]=useState(initialAction?.kind==='expenses'?'expenses':'reports'), [review,setReview]=useState(false);
-    const [form,setForm,stored]=useDraft('expense',{category:'Прочие расходы',name:'',recipient:'',amount:'',date:today()});
+    const [screen,setScreen]=useState(initialAction?.kind==='expenses'?'expenses':initialAction?.kind==='report-period'?'reports':data.isOwner?'money':'reports');
     const [from,setFrom]=useState(''), [to,setTo]=useState('');
-    const reviewRef=useRef(null);
-    useEffect(()=>{if(initialAction?.kind==='expenses')setScreen('expenses');if(initialAction?.kind==='cash')setScreen('cash');if(initialAction?.kind==='analytics')setScreen('analytics');if(initialAction?.kind==='report-period')setScreen('reports');},[initialAction]);
-    useEffect(()=>{if(review)reviewRef.current?.scrollIntoView({block:'start'});},[review]);
-    const change=(k,v)=>{setReview(false);setForm(f=>({...f,[k]:v}));};
+    useEffect(()=>{if(initialAction?.kind==='expenses')setScreen('expenses');if(initialAction?.kind==='money'&&data.isOwner)setScreen('money');if(initialAction?.kind==='cash')setScreen('cash');if(initialAction?.kind==='analytics')setScreen('analytics');if(initialAction?.kind==='report-period')setScreen('reports');},[initialAction]);
     const filter=row=>{const day=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Qyzylorda',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(row.date));return(!from||day>=from)&&(!to||day<=to);};
     const originalIncome=(data.incomes||[]).filter(filter),returnRows=returnSales(data).filter(filter),income=[...originalIncome,...returnRows].sort((a,b)=>String(b.date).localeCompare(String(a.date))),expense=(data.outcomes||[]).filter(filter);
     const incomeTotal=income.reduce((s,r)=>s+Number(r.totalAmount),0),expenseTotal=expense.reduce((s,r)=>s+Number(r.totalAmount),0);
+    const navigation=<nav className="op-report-tabs ux-finance-mode" aria-label="Деньги и результат">{data.isOwner&&<button aria-pressed={screen==='money'} className={screen==='money'?'active':''} onClick={()=>setScreen('money')}>Деньги</button>}<button aria-pressed={screen==='reports'} className={screen==='reports'?'active':''} onClick={()=>setScreen('reports')}>Результат бизнеса</button></nav>;
+    if(screen==='money'&&data.isOwner)return <>{navigation}<Money data={data} run={run} busy={busy} onNavigate={onNavigate}/></>;
     if(screen==='expenses')return <><button className="ghost" onClick={()=>setScreen('reports')}>← К отчёту владельца</button><Expenses data={data} run={run} busy={busy}/></>;
     if(screen==='cash')return <><button className="ghost" onClick={()=>setScreen('reports')}>← К отчёту владельца</button><CashFlow data={data}/></>;
     if(screen==='analytics')return <><button className="ghost" onClick={()=>setScreen('reports')}>← К отчёту владельца</button><BusinessAnalytics data={data}/></>;
-    return <>{screen==='reports'?<><section className="op-card"><button className="secondary" onClick={()=>setScreen('analytics')}>Маржа, ABC, план / факт →</button><button className="secondary" onClick={()=>onNavigate?.('expenses')}>Расходы →</button></section><Reports initialPeriod={initialAction?.kind==='report-period'?initialAction:null} data={data} onNavigate={onNavigate} onJournal={()=>setScreen('finance')}/></>:<><button className="ghost" onClick={()=>setScreen('reports')}>← К отчёту владельца</button>
+    return <>{navigation}{screen==='reports'?<><Reports initialPeriod={initialAction?.kind==='report-period'?initialAction:null} data={data} onNavigate={onNavigate} onAnalytics={()=>setScreen('analytics')} onJournal={range=>{setFrom(range.from);setTo(range.to);setScreen('finance');}}/></>:<><button className="ghost" onClick={()=>setScreen('reports')}>← К отчёту владельца</button>
         <section className="op-card"><h2>Продажи и расходы</h2><div className="op-form-grid"><Field label="С даты" type="date" value={from} onChange={e=>{const v=e.target.value;setFrom(v);if(to&&v>to)setTo(v);}}/><Field label="По дату" type="date" min={from} value={to} onChange={e=>{const v=e.target.value;setTo(v);if(v&&from>v)setFrom(v);}}/></div><div className="op-costs"><span>Продажи до возвратов <b>{moneyFmt(originalIncome.reduce((s,r)=>s+Number(r.totalAmount),0))} ₸</b></span><span>Возвраты товаров <b>{moneyFmt(returnRows.reduce((s,r)=>s-Number(r.totalAmount),0))} ₸</b></span><strong>Продажи после возвратов <b>{moneyFmt(incomeTotal)} ₸</b></strong><span>Записанные расходы <b>{moneyFmt(expenseTotal)} ₸</b></span><span>В том числе отдано клиентам <b>{moneyFmt(expense.filter(r=>r.outcome_category?.name==='Возврат покупателю').reduce((s,r)=>s+Number(r.totalAmount),0))} ₸</b></span></div><p className="op-muted">Продажи после возвратов — не полученные деньги и не чистая прибыль. Возврат денег уже входит в расходы; не вычитайте его повторно из продаж после возвратов.</p><details className="op-help"><summary>Откуда берутся суммы</summary><p>Отгрузки записываются в продажи. Оплаченные приходы, выданная зарплата и другие расходы — в расходы. Получение денег от покупателей записывается в разделе «Клиенты → Оплаты и долги». Платёж поставщику не является повторным приходом товара.</p></details></section>
         <section className="op-card"><button onClick={()=>setScreen('expenses')}>+ Записать расход</button></section>
         <section className="op-card"><h2>Продажи</h2>{!income.length?<Empty>Продаж за выбранные даты нет.</Empty>:<Table mobileCards headers={['Дата','Клиент / магазин','Товар','Вес','Сумма']}>{income.map(r=><tr key={r.id}><td>{new Date(r.date).toLocaleDateString('ru-RU')}</td><td>{r.business_relation?.name}{r.destination&&<small className="op-cell-detail">{r.destination.outletName} · {r.destination.address}</small>}</td><td>{r.isReturn?'Возврат · ':''}{r.product?.name||'Товар не указан'}</td><td>{fmt(r.totalWeight)} кг</td><td>{moneyFmt(r.totalAmount)} ₸</td></tr>)}</Table>}</section>

@@ -1,3 +1,5 @@
+import {reconciliation} from './reconciliationMetrics';
+import {workbook,download} from './reportExport';
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, fmt, moneyFmt, today } from './api';
 import './print.css';
@@ -5,7 +7,7 @@ import './print.css';
 const money = value => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const dateText = value => value ? new Date(value + 'T00:00:00').toLocaleDateString('ru-RU') : '';
 const rowDate = value => value ? String(value).slice(0, 10) : '';
-const monthStart = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10); };
+const monthStart = () => today().slice(0,7)+'-01';
 const ones = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять', 'десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать', 'семнадцать', 'восемнадцать', 'девятнадцать'];
 const tens = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
 const hundreds = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
@@ -50,36 +52,23 @@ export function ReconciliationAct({ party, supplier = false, entries: ledgerEntr
         api('/act-number', { partyKey: party.key, from, to }, 'POST').then(result => { if (active) setActNumber(result.label || ''); }).catch(() => {});
         return () => { active = false; };
     }, [party?.key, from, to]);
-    const data = useMemo(() => {
-        const docs = (party?.documents || []).filter(doc => !doc.isOpening && (!doc.date || (doc.date >= from && doc.date <= to)));
-        const entries = (ledgerEntries.length ? ledgerEntries : party?.entries || []).filter(entry => entry.partyKey === party?.key && entry.status === 'posted' && entry.date >= from && entry.date <= to);
-        const rows = [];
-        for (const doc of docs) rows.push({ date: doc.date || doc.deliveryDate, document: doc.document || 'Накладная № ' + String(doc.id).slice(0, 8).toUpperCase(), debit: supplier ? 0 : money(doc.total), credit: supplier ? money(doc.total) : 0 });
-        for (const entry of entries) rows.push({ date: entry.date, document: (entry.method ? 'Оплата · ' + entry.method : 'Оплата') + (entry.comment ? ' · ' + entry.comment : ''), debit: supplier ? money(entry.amount) : 0, credit: supplier ? 0 : money(entry.amount) });
-        if (!supplier) {
-            for (const item of partyReturns.filter(row => row.status === 'posted' && (!row.postedAt || (String(row.postedAt).slice(0, 10) >= from && String(row.postedAt).slice(0, 10) <= to)))) {
-                rows.push({ date: rowDate(item.postedAt), document: 'Возврат № ' + String(item.id).slice(0, 8).toUpperCase() + (item.reason ? ' · ' + item.reason : ''), debit: 0, credit: money(item.total) });
-            }
-        }
-        rows.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
-        const opening = supplier ? Number(party?.opening || 0) : Number(party?.opening || 0);
-        const debit = rows.reduce((sum, row) => sum + Number(row.debit || 0), 0);
-        const credit = rows.reduce((sum, row) => sum + Number(row.credit || 0), 0);
-        const closing = supplier ? Math.max(0, opening + credit - debit) : Math.max(0, opening + debit - credit);
-        return { rows, opening, debit, credit, closing };
-    }, [party, supplier, partyReturns, from, to]);
+    const data = useMemo(() => reconciliation({party,supplier,entries:ledgerEntries.length?ledgerEntries:party?.entries||[],returns:partyReturns,from,to}),[party,supplier,ledgerEntries,partyReturns,from,to]);
+    const sides=value=>supplier?{debit:Math.max(0,-value),credit:Math.max(0,value)}:{debit:Math.max(0,value),credit:Math.max(0,-value)};
+    const opening=sides(data.opening),closing=sides(data.closing),flip=value=>({debit:value.credit,credit:value.debit});
+    const exportAct=()=>download(workbook([{name:'Акт сверки',rows:[['Акт сверки',actNumber],['Контрагент',party.name],['Период',from,to],['Долг на начало',data.opening],['Дата','Документ','Дебет','Кредит','Долг / аванс'],...data.rows.map(r=>[r.date,r.document,r.debit,r.credit,r.balance]),['Обороты','',data.debit,data.credit],['Долг на конец',data.closing]]}]),'COND-Акт-сверки.xlsx');
     const ours = company;
     return <section className="op-act-document">
-        <div className="op-actions op-no-print"><button onClick={() => window.print()}>Печать / PDF</button><button className="secondary" onClick={onClose}>Назад</button></div>
-        <div className="op-act-toolbar op-no-print"><label>Период с <input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>по <input type="date" value={to} onChange={e => setTo(e.target.value)} /></label><span>1 лист A4</span></div>
+        <div className="op-actions op-no-print"><button onClick={() => window.print()}>Печать / PDF</button><button className="secondary" onClick={exportAct}>Excel</button><button className="secondary" onClick={onClose}>Назад</button></div>
+        <div className="op-act-toolbar op-no-print"><label>Период с <input type="date" max={to} value={from} onChange={e => setFrom(e.target.value)} /></label><label>по <input type="date" min={from} value={to} onChange={e => setTo(e.target.value)} /></label><span>1 лист A4</span></div>
         <h2 className="op-act-title">Акт сверки № {actNumber || String(party?.key || party?.id || '').split(':').pop().replace(/-/g, '').slice(0, 8).toUpperCase()} от {dateText(to)} г.</h2>
         <p className="op-act-subtitle">взаимных расчётов за период с {dateText(from)} по {dateText(to)} между <b>{party?.name}</b> и <b>{ours}</b></p>
         <p className="op-act-subtitle">Мы, нижеподписавшиеся, составили настоящий акт сверки в том, что состояние взаимных расчётов по данным учёта следующее:</p>
+        <div className="cond-statement-mobile op-no-print"><div className="op-costs"><span>На начало <b>{moneyFmt(data.opening)} ₸</b></span><strong>{data.closing<0?'Аванс':supplier?'Наш долг':'Долг клиента'} <b>{moneyFmt(Math.abs(data.closing))} ₸</b></strong></div>{data.rows.map((r,i)=><article className="cond-document" key={i}><small>{dateText(r.date)}</small><b>{r.document}</b><p>{r.credit>0?(supplier?'Получено товара':'Зачтено / оплачено'):(supplier?'Оплатили':'Отгружено')}: {moneyFmt(r.debit||r.credit)} ₸</p><small>{r.balance<0?'Аванс':'Долг'}: {moneyFmt(Math.abs(r.balance))} ₸</small></article>)}</div>
         <div className="op-act-grid">
-            <ActTable title={'По данным ' + (party?.name || '')} rows={data.rows.map(row => ({ ...row }))} opening={{ debit: supplier ? 0 : data.opening, credit: supplier ? data.opening : 0 }} debit={data.debit} credit={data.credit} closing={{ debit: supplier ? 0 : data.closing, credit: supplier ? data.closing : 0 }} />
-            <ActTable title={'По данным ' + ours} rows={data.rows.map(row => ({ ...row, debit: row.credit, credit: row.debit }))} opening={{ debit: supplier ? data.opening : 0, credit: supplier ? 0 : data.opening }} debit={data.credit} credit={data.debit} closing={{ debit: supplier ? data.closing : 0, credit: supplier ? 0 : data.closing }} />
+            <ActTable title={'По данным ' + (party?.name || '')} rows={data.rows.map(row => ({ ...row }))} opening={opening} debit={data.debit} credit={data.credit} closing={closing} />
+            <ActTable title={'По данным ' + ours} rows={data.rows.map(row => ({ ...row, debit: row.credit, credit: row.debit }))} opening={flip(opening)} debit={data.credit} credit={data.debit} closing={flip(closing)} />
         </div>
-        <div className="op-act-summary"><b>Задолженность на {dateText(to)}: {moneyFmt(data.closing)} ₸</b><span>{amountWords(data.closing)}</span></div>
+        <div className="op-act-summary"><b>{data.closing<0?(supplier?'Аванс поставщику':'Аванс клиента'):(supplier?'Мы должны поставщику':'Клиент должен нам')} на {dateText(to)}: {moneyFmt(Math.abs(data.closing))} ₸</b><span>{amountWords(Math.abs(data.closing))}</span></div>
         <div className="op-act-signatures"><div>От {party?.name}<br /><br />_______________ / ____________ /<br />М.П.</div><div>От {ours}<br /><br />_______________ / ____________ /<br />М.П.</div></div>
     </section>;
 }

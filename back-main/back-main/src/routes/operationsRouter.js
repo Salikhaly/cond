@@ -12,6 +12,7 @@ const wrap = fn => async (req, res, next) => {
     try {
         if(req.params.id&&!/^(?:[1-9]\d{0,9}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(req.params.id))throw ApiError.badRequest('Некорректный номер записи');
         const mutation = req.user && !['GET','HEAD'].includes(req.method) && !['/preview','/sync/send'].includes(req.path);
+        if (mutation && req.path==='/client-bonuses' && !req.headers['x-operation-id']) throw ApiError.badRequest('Обновите страницу и подтвердите выдачу бонуса');
         if (mutation) req.headers['x-operation-id'] ||= require('crypto').randomUUID();
         const action = async () => {
             const trail=require('../services/auditTrail'),before=mutation?await trail.snapshot(req):null;
