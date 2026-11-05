@@ -6,7 +6,7 @@ module.exports=b=>{
         const input = Array.isArray(b.lines) ? b.lines : [b];
         if (!input.length || input.length > 100) throw ApiError.badRequest('Добавьте материалы');
         const lines=input.map(l=>{
-            const materialId=text(l.materialId,'материал');
+            const materialId=text(l.materialId,'материал').toLowerCase();
             const shortageReason = l.shortageReason == null || l.shortageReason === '' ? null : text(l.shortageReason, 'причину недопоставки').slice(0, 64);
             const shortageComment = l.shortageComment == null || l.shortageComment === '' ? null : text(l.shortageComment, 'комментарий к недопоставке').slice(0, 500);
             if (shortageReason === 'Другое' && !shortageComment) throw ApiError.badRequest('Для причины «Другое» укажите комментарий');

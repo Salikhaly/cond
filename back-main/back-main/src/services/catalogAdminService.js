@@ -70,7 +70,11 @@ module.exports={
   if(b.kind!==undefined){if(!['raw','box','film'].includes(b.kind))throw ApiError.badRequest('Неверный тип материала');values.kind=b.kind;}
   if(b.unit!==undefined){if(!['кг','л','шт','м'].includes(b.unit))throw ApiError.badRequest('Неверная единица');values.unit=b.unit;}
   if(b.capacityKg!==undefined)values.capacityKg=b.capacityKg===null||b.capacityKg===''?null:number(b.capacityKg);
-  if(b.unitCost!==undefined)values.unitCost=b.unitCost===null||b.unitCost===''?0:number(b.unitCost,true);
+  if(b.unitCost!==undefined){
+   const price=b.unitCost===null||b.unitCost===''?0:number(b.unitCost,true);
+   if(price!==Number(m.unitCost)&&(Number(m.quantity)>0||await M.Receipt.count({where:{materialId:m.id},transaction:t})))throw ApiError.badRequest('Цена берётся из приходов. Исправьте приход отдельной корректировкой');
+   values.unitCost=price;if(Number(m.quantity)===0&&!await M.Receipt.count({where:{materialId:m.id},transaction:t}))values.costComplete=price>0?true:null;
+  }
   if(!Object.keys(values).length)throw ApiError.badRequest('Нет данных для сохранения');
   return m.update(values,{transaction:t});
  });}

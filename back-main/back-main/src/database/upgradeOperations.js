@@ -4,6 +4,7 @@ module.exports = async () => db.transaction(async t => {
     // One-time transition: pending requests no longer reserve warehouse stock.
     await db.query('SELECT pg_advisory_xact_lock(42810241)',{transaction:t});
     const M=require('../models/operations');
+    await db.query('ALTER TABLE IF EXISTS materials ADD COLUMN IF NOT EXISTS "costComplete" BOOLEAN',{transaction:t});
     await M.BoxRule.sync({transaction:t});
     await M.ReceiptCorrection.sync({transaction:t});
     await db.query('ALTER TABLE '+db.getQueryInterface().queryGenerator.quoteTable(M.ProductPack.getTableName())+' ADD COLUMN IF NOT EXISTS "filmMaterialId" UUID REFERENCES materials(id)',{transaction:t});
@@ -49,4 +50,5 @@ module.exports = async () => db.transaction(async t => {
             if (rows.length && Number(rows[0].numeric_scale || 0) < 4) await db.query(`ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE NUMERIC(16,4) USING "${column}"::numeric`, { transaction: t });
         }
     }
+    if(process.env.SYNC_ROLE!=='cloud')await require('../services/materialPriceService').backfill(t);
 });

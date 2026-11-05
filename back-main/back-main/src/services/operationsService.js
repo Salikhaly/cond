@@ -186,7 +186,7 @@ module.exports = {
         const unitsPerPack = body.unitsPerPack == null || body.unitsPerPack === '' ? null : num(body.unitsPerPack, 'штук в коробке');
         const capacityKg = kind === 'box' && body.capacityKg != null && body.capacityKg !== '' ? num(body.capacityKg, 'вместимость коробки') : null;
         const unitCost = body.unitCost == null || body.unitCost === '' ? 0 : num(body.unitCost, 'цена за единицу', true);
-        return M.Material.create({ name: text(body.name, 'название'), unit: body.unit, kind, capacityKg, unitCost, packUnit, unitsPerPack });
+        return M.Material.create({ name: text(body.name, 'название'), unit: body.unit, kind, capacityKg, unitCost, costComplete:unitCost>0?true:null, packUnit, unitsPerPack });
     },
     async receipt(user, b, transaction) {
         admin(user);
@@ -197,12 +197,15 @@ module.exports = {
         const {lines,costs}=require('./receiptInput')(b);
         const receive=async t => {
             const totalCost = money(lines.reduce((s,l)=>s+l.lineTotal,0));
-            const doc = await M.ReceiptDocument.create({ document, supplier, date: receiptDate, lines, total: totalCost, paid: Boolean(b.paid) }, { transaction: t });
-            if(costs.total||costs.comment)await M.ReceiptCosts.create({receiptId:doc.id,...costs},{transaction:t});
             const [relationSupplier]=await M.Supplier.findOrCreate({where:{name:supplier},transaction:t});
             await db.query('SELECT pg_advisory_xact_lock(hashtext(:key))',{replacements:{key:'trade-money:supplier:'+relationSupplier.id},transaction:t});
+            const locked=[];for(const materialId of lines.map(l=>l.materialId).sort())locked.push(required(await M.Material.findByPk(materialId,{transaction:t,lock:t.LOCK.UPDATE}),'Материал'));
+            const priorKnown=await require('./materialPriceService').known(locked,t);
+            const doc = await M.ReceiptDocument.create({ document, supplier, date: receiptDate, lines, total: totalCost, paid: Boolean(b.paid) }, { transaction: t });
+            if(costs.total||costs.comment)await M.ReceiptCosts.create({receiptId:doc.id,...costs},{transaction:t});
             for (const l of lines) {
-                const m = required(await M.Material.findByPk(l.materialId, { transaction: t, lock: t.LOCK.UPDATE }), 'Материал');
+                const m = locked.find(m=>m.id===l.materialId);
+                m.costComplete=Number(m.quantity)<=.00001||priorKnown.has(String(m.id));
                 if(m.active===false)throw ApiError.badRequest('Сначала восстановите материал из архива');
                 const total = Number(m.quantity) + l.quantity;
                 m.unitCost = round((Number(m.quantity) * Number(m.unitCost) + l.lineTotal) / total);

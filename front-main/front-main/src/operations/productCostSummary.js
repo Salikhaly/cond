@@ -21,7 +21,7 @@ function productCostSummary(product,data,packId){
  for(const line of lines){const material=materials.find(m=>String(m.id)===String(line.materialId));
   if(!material){const archived=(data.archivedMaterials||[]).find(m=>String(m.id)===String(line.materialId));issues.push({kind:'material',scope:line.kind,materialId:line.materialId,label:archived?'Уберите из состава или восстановите: '+archived.name:'Не найден материал: '+line.name});}
   else {
-   if(!pricesKnown.has(String(material.id)))issues.push({kind:'price',materialId:line.materialId,label:'Уточните цену: '+line.name});
+   if(!pricesKnown.has(String(material.id)))issues.push({kind:material.costComplete===false&&Number(material.unitCost)>0?'valuation':'price',materialId:line.materialId,label:(material.costComplete===false&&Number(material.unitCost)>0?'Не оценена часть остатка: ':'Уточните цену: ')+line.name});
   }
   if(!(line.quantity>0))issues.push({kind:'recipe',label:'Укажите расход: '+line.name});
  }

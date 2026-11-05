@@ -49,6 +49,10 @@ async function main() {
     const correctionBody={date:today,reason:'Уточнена цена поставщика',expectedVersion:0,lines:[{materialId:correctedMaterial.id,quantity:10,unitCost:30}]};
     const preview=await call(3003,'/operations/receipts/'+correctedReceipt.id+'/corrections/preview',admin,correctionBody);
     await call(3003,'/operations/receipts/'+correctedReceipt.id+'/corrections',admin,{...correctionBody,confirmed:true,fingerprint:preview.fingerprint});
+    const mixedMaterial=await call(3003,'/operations/materials',admin,{name:'Смешанная оценка в копии',unit:'кг'});
+    const mixedCount=await call(3003,'/operations/stock-counts',admin,{date:today,lines:[{kind:'material',itemId:mixedMaterial.id,actualQty:3}]});
+    await call(3003,'/operations/stock-counts/'+mixedCount.id+'/accept',admin,{confirmed:true,expectedUpdatedAt:mixedCount.updatedAt,lines:mixedCount.lines,skipUncounted:true});
+    await call(3003,'/operations/receipts',admin,{supplier:'Смешанная оценка',date:today,lines:[{materialId:mixedMaterial.id,quantity:10,unitCost:100}]});
     await call(3003,'/operations/packaging/boxes',admin,{capacityKg:3,filmQtyM:0});
     check((await call(3003, '/operations/sync/status', admin)).pending > 0, 'Operations save locally while external server is absent');
     await call(3003, '/operations/sync/send', admin, {}, 400);
@@ -66,6 +70,7 @@ async function main() {
     await call(3003, '/operations/sync/send', admin, {});
     check((await call(3003, '/operations/sync/status', admin)).pending === 0, 'Confirmed upload acknowledges queued changes');
     const copy = await call(3004, '/operations/dashboard', ca);
+    const copiedMixed=copy.materials.find(m=>m.id===mixedMaterial.id);check(copiedMixed.costComplete===false&&Number(copiedMixed.quantity)===13&&Number(copiedMixed.unitCost)>0,'Cloud copy preserves partial valuation with a positive weighted cost');
     check(Number(copy.materials.find(m => m.id === material.id).quantity) === Number(material.quantity) + 2, 'Received copy contains current stock from source database');
     check(copy.receiptCorrections.some(c=>c.receiptId===correctedReceipt.id&&Number(c.totalDelta)===100)&&copy.boxRules.some(r=>Number(r.capacityKg)===3),'Cloud copy exposes correction history and shared packaging rules');
     const newest=(await sql.query('SELECT * FROM sync_batches WHERE "sentAt" IS NOT NULL ORDER BY id DESC LIMIT 1')).rows[0];

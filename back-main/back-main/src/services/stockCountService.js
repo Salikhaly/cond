@@ -76,10 +76,11 @@ async function post(u,id,b,outer){
     assessment=await require('./stockValueService').stocktake(current.row,delta,l.surplusCost,doc.id,doc.date,t);
     await current.row.update({kg:actual},{transaction:t});await current.product.update({weightTotal:actual,quantity:Math.floor((actual+1e-8)/Number(current.product.weight))},{transaction:t});
    }else{
-    const cost=delta>0&&l.surplusCost!=null?Number(l.surplusCost):Number(current.unitCost);
+    const numericCost=Number(current.row.unitCost),cost=delta>0?(l.surplusCost!=null?Number(l.surplusCost):current.unitCost==null?0:numericCost):numericCost;
     assessment={costDelta:round(delta*cost),costComplete:delta===0||delta>0&&l.surplusCost!=null||current.unitCost!=null};
-    const unitCost=delta>0&&actual>0?round((current.bookQty*Number(current.unitCost)+delta*cost)/actual):Number(current.unitCost);
-    await current.row.update({quantity:actual,unitCost},{transaction:t});
+    const unitCost=delta>0&&actual>0?round((current.bookQty*numericCost+delta*cost)/actual):numericCost;
+    const costComplete=delta>0?(current.bookQty<=.00001||current.unitCost!=null)&&(l.surplusCost!=null||current.unitCost!=null):current.unitCost!=null;
+    await current.row.update({quantity:actual,unitCost,costComplete},{transaction:t});
    }
    lines.push({...l,bookQty:current.bookQty,unitCost:current.unitCost,token:current.token,delta,...assessment,retailDelta:l.retailPrice==null?null:round(delta*Number(l.retailPrice))});
   }
