@@ -38,10 +38,10 @@ export default function Packaging({ data, run, busy }) {
         run(async () => {
             await api('/product-packs', { ...packForm, filmQtyM: packForm.filmQtyM || 0 });
             setPackForm(emptyPack);
-        }, 'Тип коробки добавлен товару');
+        }, 'Фасовка добавлена товару');
     };
     const saveMaterial = (id, values) => run(() => api('/materials/' + id, values, 'PATCH'), 'Цена обновлена');
-    const savePack = (id, values) => run(() => api('/product-packs/' + id, values, 'PATCH'), 'Настройки коробки обновлены');
+    const savePack = (id, values) => run(() => api('/product-packs/' + id, values, 'PATCH'), 'Фасовка обновлена');
     const saveEditing = () => run(async () => {
         await api('/product-packs/' + editingPack.id, {
             boxMaterialId: editingPack.boxMaterialId,
@@ -51,14 +51,14 @@ export default function Packaging({ data, run, busy }) {
             laborPerBox: editingPack.laborPerBox,
         }, 'PATCH');
         setEditingPack(null);
-    }, 'Коробка изменена');
+    }, 'Фасовка изменена');
     const deletePack = pack => {
-        if (!window.confirm('Удалить коробку ' + fmt(pack.capacityKg) + ' кг у товара «' + pack.product.name + '»?')) return;
+        if (!window.confirm('Удалить фасовку ' + fmt(pack.capacityKg) + ' кг у товара «' + pack.product.name + '»?')) return;
         run(async () => {
             const result = await api('/product-packs/' + pack.id, {}, 'DELETE');
             setEditingPack(null);
-            if (result.archived) throw new Error('Коробка уже использовалась — она перенесена в архив, а не удалена');
-        }, 'Коробка удалена');
+            if (result.archived) throw new Error('Фасовка уже использовалась — она перенесена в архив');
+        }, 'Фасовка удалена');
     };
 
     return <>
@@ -81,7 +81,7 @@ export default function Packaging({ data, run, busy }) {
             <section className="op-card"><h2>Фасовки готовых товаров</h2><p className="op-muted">Например: печенье в коробке 2,5 кг. Цена и остаток — за коробку с товаром.</p>
                 {packs.length ? <Table mobileCards headers={['Товар', 'Фасовка', 'Плёнка, м', 'Цена продажи, ₸/кор.', 'Себестоимость', 'Готово, кор.', '']}>{packs.map(pack => <tr key={pack.id}><td>{pack.product.name}</td><td>{fmt(pack.capacityKg)} кг</td><td><input aria-label={'Плёнка на коробку ' + pack.product.name} type="number" min="0" step="0.01" defaultValue={pack.filmQtyM} onBlur={e => Number(e.target.value) !== Number(pack.filmQtyM) && savePack(pack.id, { filmQtyM: e.target.value })} /></td><td><input aria-label={'Цена коробки ' + pack.product.name} type="number" min="0" step="0.01" defaultValue={pack.salePrice ?? ''} onBlur={e => savePack(pack.id, { salePrice: e.target.value })} /> ₸</td><td>{moneyFmt(pack.costPerBox)} ₸</td><td>{fmt(pack.availableBoxes)} кор.</td><td><div className="op-actions"><button className="secondary" disabled={busy} onClick={() => setEditingPack({ ...pack })}>Изменить</button><button className="ghost danger" disabled={busy} onClick={() => deletePack(pack)}>Удалить</button></div></td></tr>)}</Table> : <Empty>Фасовок пока нет.</Empty>}
             </section>
-            {editingPack && <section className="op-card"><h2>Изменить фасовку · {editingPack.product.name}</h2><p className="op-muted">Вместимость нельзя менять, если на складе уже есть коробки или была выработка. Цену и плёнку можно менять всегда.</p><form onSubmit={e => { e.preventDefault(); saveEditing(); }}><div className="op-form-grid"><Field label="Пустая коробка"><select value={editingPack.boxMaterialId} onChange={e => setEditingPack(f => ({ ...f, boxMaterialId: e.target.value }))}>{boxes.map(box => <option key={box.id} value={box.id}>{box.name}</option>)}</select></Field><Field label="Вместимость, кг" type="number" min="0.01" step="0.01" required value={editingPack.capacityKg} onChange={e => setEditingPack(f => ({ ...f, capacityKg: e.target.value }))} /><Field label="Плёнка на коробку, м" type="number" min="0" step="0.01" value={editingPack.filmQtyM} onChange={e => setEditingPack(f => ({ ...f, filmQtyM: e.target.value }))} /><Field label="Цена за коробку, ₸" type="number" min="0" step="0.01" value={editingPack.salePrice ?? ''} onChange={e => setEditingPack(f => ({ ...f, salePrice: e.target.value }))} /><Field label="Оплата за коробку, ₸" type="number" min="0" step="0.01" value={editingPack.laborPerBox} onChange={e => setEditingPack(f => ({ ...f, laborPerBox: e.target.value }))} /></div><div className="op-actions"><button disabled={busy}>Сохранить</button><button type="button" className="ghost danger" disabled={busy} onClick={() => deletePack(editingPack)}>Удалить коробку</button><button type="button" className="secondary" onClick={() => setEditingPack(null)}>Отмена</button></div></form></section>}
+            {editingPack && <section className="op-card"><h2>Изменить фасовку · {editingPack.product.name}</h2><p className="op-muted">Вместимость нельзя менять, если на складе уже есть коробки или была выработка. Цену и плёнку можно менять всегда.</p><form onSubmit={e => { e.preventDefault(); saveEditing(); }}><div className="op-form-grid"><Field label="Пустая коробка"><select value={editingPack.boxMaterialId} onChange={e => setEditingPack(f => ({ ...f, boxMaterialId: e.target.value }))}>{boxes.map(box => <option key={box.id} value={box.id}>{box.name}</option>)}</select></Field><Field label="Вместимость, кг" type="number" min="0.01" step="0.01" required value={editingPack.capacityKg} onChange={e => setEditingPack(f => ({ ...f, capacityKg: e.target.value }))} /><Field label="Плёнка на коробку, м" type="number" min="0" step="0.01" value={editingPack.filmQtyM} onChange={e => setEditingPack(f => ({ ...f, filmQtyM: e.target.value }))} /><Field label="Цена за коробку, ₸" type="number" min="0" step="0.01" value={editingPack.salePrice ?? ''} onChange={e => setEditingPack(f => ({ ...f, salePrice: e.target.value }))} /><Field label="Оплата за коробку, ₸" type="number" min="0" step="0.01" value={editingPack.laborPerBox} onChange={e => setEditingPack(f => ({ ...f, laborPerBox: e.target.value }))} /></div><div className="op-actions"><button disabled={busy}>Сохранить</button><button type="button" className="ghost danger" disabled={busy} onClick={() => deletePack(editingPack)}>Удалить фасовку</button><button type="button" className="secondary" onClick={() => setEditingPack(null)}>Отмена</button></div></form></section>}
             <section className="op-card"><h2>Добавить фасовку товара</h2><form onSubmit={addPack}><div className="op-form-grid"><Field label="Товар"><select required value={packForm.productId} onChange={e => setPackForm(f => ({ ...f, productId: e.target.value }))}><option value="">Выберите товар</option>{products.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></Field><Field label="Пустая коробка"><select required value={packForm.boxMaterialId} onChange={e => setPackForm(f => ({ ...f, boxMaterialId: e.target.value }))}><option value="">Выберите коробку</option>{boxes.map(box => <option key={box.id} value={box.id}>{box.name}</option>)}</select></Field><Field label="Плёнка на коробку, м" type="number" min="0" step="0.01" value={packForm.filmQtyM} onChange={e => setPackForm(f => ({ ...f, filmQtyM: e.target.value }))} /><Field label="Цена за коробку, ₸" type="number" min="0" step="0.01" value={packForm.salePrice} onChange={e => setPackForm(f => ({ ...f, salePrice: e.target.value }))} /><Field label="Оплата за коробку, ₸" type="number" min="0" step="0.01" value={packForm.laborPerBox} onChange={e => setPackForm(f => ({ ...f, laborPerBox: e.target.value }))} /></div><button disabled={busy || !boxes.length}>Добавить</button></form>{!boxes.length && <p className="op-missing">Сначала добавьте упаковку во вкладке «Пустые коробки».</p>}</section>
         </>}
     </>;
