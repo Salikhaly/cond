@@ -13,7 +13,7 @@ const num = (v, label, zero = false) => {
     if (!['number', 'string'].includes(typeof v) || String(v).trim() === '' || !Number.isFinite(n) || (zero ? n < 0 : n <= 0) || n > 1e9 || Math.abs(n - Math.round(n * 10000) / 10000) > 1e-8) throw ApiError.badRequest(`Некорректное значение: ${label} (не более 4 знаков после запятой)`);
     return n;
 };
-const round = n => Math.round((n + Number.EPSILON) * 10000) / 10000;
+const round = n => Math.round((Number(n) + Number.EPSILON) * 10000) / 10000;
 const text = (v, label) => { if (typeof v !== 'string' || !v.trim() || v.length > 250) throw ApiError.badRequest(`Укажите ${label}`); return v.trim(); };
 const date = v => { if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(v)) || new Date(v).toISOString().slice(0, 10) !== v) throw ApiError.badRequest('Укажите корректную дату'); return v; };
 const required = (v, label) => { if (!v) throw ApiError.notFound(`${label} не найден`); return v; };

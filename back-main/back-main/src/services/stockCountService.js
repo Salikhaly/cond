@@ -5,14 +5,23 @@ const fail=m=>{throw ApiError.badRequest(m);};
 const quantity=v=>{const n=Number(v);if(!['string','number'].includes(typeof v)||String(v).trim()===''||!Number.isFinite(n)||n<0||n>1e8||Math.abs(n-round(n))>1e-8)fail('Проверьте фактическое количество или стоимость');return n;};
 const stamp=v=>v?new Date(v).toISOString():'';
 async function book(line,t,lock=false){
- if(!['material','product'].includes(line.kind))fail('Выберите вид запаса');
+ if(!['material','product','pack'].includes(line.kind))fail('Выберите вид запаса');
  const options={transaction:t,...(lock?{lock:t.LOCK.UPDATE}:{})};
  if(line.kind==='material'){
   const m=await M.Material.findByPk(line.itemId,options);if(!m||!m.active)fail('Материал недоступен');
   return {row:m,name:m.name,unit:m.unit,bookQty:Number(m.quantity),unitCost:Number(m.unitCost),retailPrice:null,token:stamp(m.updatedAt)};
  }
- const p=await Product.findByPk(line.itemId,options);if(!p||!p.is_active)fail('Товар недоступен');
+ const pack=line.kind==='pack'?await M.ProductPack.findByPk(line.itemId,{transaction:t}):null;
+ if(line.kind==='pack'&&(!pack||!pack.active))fail('Фасовка недоступна');
+ const p=await Product.findByPk(pack?pack.productId:line.itemId,options);if(!p||!p.is_active)fail('Товар недоступен');
  const s=await M.Stock.findByPk(p.id,options);if(!s)fail('Нет складской карточки');const value=await M.StockValue.findByPk(p.id,{transaction:t}),price=await M.SellingPrice.findByPk(p.id,{transaction:t});
+ if(pack){
+  if(lock)await pack.reload(options);
+  if(!pack.active)fail('Фасовка недоступна');
+  const ps=await M.PackStock.findByPk(pack.id,options);if(!ps)fail('Нет остатка фасовки');
+  const cost=value&&Number(value.kg)>0&&Number(value.kg)-Number(value.knownKg)<.00011?Number(value.value)/Number(value.kg)*Number(pack.capacityKg):null;
+  return {row:s,product:p,pack,packStock:ps,productId:p.id,capacityKg:Number(pack.capacityKg),name:p.name+' · '+Number(pack.capacityKg)+' кг',unit:'коробок',bookQty:Number(ps.boxes),unitCost:cost,retailPrice:pack.salePrice==null?price?.price==null?null:Number(price.price)*Number(pack.capacityKg):Number(pack.salePrice),token:stamp(ps.updatedAt)+'|'+stamp(pack.updatedAt)};
+ }
  return {row:s,product:p,name:p.name,unit:'кг',bookQty:Number(s.kg),unitCost:value&&Number(value.kg)>0&&Number(value.kg)-Number(value.knownKg)<.00011?Number(value.value)/Number(value.kg):null,retailPrice:price?.price==null?null:Number(price.price),token:stamp(s.updatedAt)+'|'+stamp(value?.updatedAt)};
 }
 function inputs(b){
@@ -23,7 +32,8 @@ async function create(u,b){
  admin(u);if(typeof b.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(b.date)||Number.isNaN(Date.parse(b.date))||new Date(b.date).toISOString().slice(0,10)!==b.date)fail('Укажите дату ревизии');
  return db.transaction(async t=>{
   if(b.correctsId){const original=await M.StockCount.findByPk(b.correctsId,{transaction:t,lock:t.LOCK.UPDATE});if(!original||original.status!=='posted')fail('Исправляется только проведённая ревизия');if(await M.StockCount.findOne({where:{correctsId:original.id,status:{[Op.ne]:'cancelled'}},transaction:t}))fail('По этой ревизии уже создана корректировка');if(!String(b.note||'').trim())fail('Укажите причину корректировки');}
-  const lines=[];for(const line of inputs(b)){const current=await book(line,t);lines.push({kind:line.kind,itemId:line.kind==='product'?Number(line.itemId):line.itemId,name:current.name,unit:current.unit,bookQty:current.bookQty,unitCost:current.unitCost,retailPrice:current.retailPrice,token:current.token,actualQty:line.actualQty==null||line.actualQty===''?null:quantity(line.actualQty),surplusCost:line.surplusCost==null||line.surplusCost===''?null:quantity(line.surplusCost)});}
+  const lines=[];for(const line of inputs(b)){const current=await book(line,t);lines.push({kind:line.kind,itemId:line.kind==='product'?Number(line.itemId):line.itemId,...(line.kind==='pack'?{productId:current.productId,capacityKg:current.capacityKg}:{}),name:current.name,unit:current.unit,bookQty:current.bookQty,unitCost:current.unitCost,retailPrice:current.retailPrice,token:current.token,actualQty:line.actualQty==null||line.actualQty===''?null:quantity(line.actualQty),surplusCost:line.surplusCost==null||line.surplusCost===''?null:quantity(line.surplusCost)});}
+  if(lines.some(l=>l.kind==='product'&&lines.some(p=>p.kind==='pack'&&p.productId===l.itemId)))fail('Выберите фасовки товара без повторного пересчёта общего веса');
   return M.StockCount.create({date:b.date,location:'Склад цеха',note:String(b.note||'').slice(0,2000),correctsId:b.correctsId||null,lines,actorId:u.id,actorName:u.name},{transaction:t});
  });
 }
@@ -44,12 +54,23 @@ async function post(u,id,b,outer){
   if(b.expectedUpdatedAt!==stamp(doc.updatedAt))throw new ApiError(409,'Черновик изменился. Проверьте ревизию заново');
   const lines=[];
   // Product → stock → material, deterministic order; matches production/shipment locks.
-  const ordered=[...doc.lines].sort((a,b)=>a.kind===b.kind?(a.kind==='product'?a.itemId-b.itemId:String(a.itemId).localeCompare(String(b.itemId))):a.kind==='product'?-1:1);
+  const ordered=[...doc.lines].sort((a,b)=>{const productId=l=>l.kind==='material'?Infinity:Number(l.productId||l.itemId);return productId(a)-productId(b)||String(a.itemId).localeCompare(String(b.itemId));});
   for(const l of ordered){
    if(l.actualQty==null)fail('Не заполнен факт: '+l.name);const current=await book(l,t,true);
    if(current.token!==l.token&&Math.abs(current.bookQty-Number(l.bookQty))>.00001)throw new ApiError(409,'Количество на складе изменилось: '+l.name+'. Обновите остатки по программе и проверьте введённый факт');
    const actual=quantity(l.actualQty),delta=round(actual-current.bookQty);let assessment;
-   if(l.kind==='product'){
+   if(l.kind==='pack'){
+    if(!Number.isInteger(actual))fail('Укажите целое число коробок: '+l.name);
+    if(Number(l.capacityKg)!==current.capacityKg)throw new ApiError(409,'Вместимость коробки изменилась: '+l.name+'. Начните новый пересчёт');
+    if(actual<Number(current.packStock.reservedBoxes))fail('Факт меньше резерва этой фасовки: '+l.name+'. Сначала пересогласуйте заявки');
+    const deltaKg=round(delta*current.capacityKg),nextKg=round(Number(current.row.kg)+deltaKg);
+    if(nextKg<Number(current.row.reservedKg)-.00001)fail('Факт меньше общего резерва: '+l.name+'. Сначала пересогласуйте заявки');
+    if(nextKg<0)fail('Вес коробок превышает общий склад: '+l.name+'. Нужна сверка исходного веса');
+    assessment=await require('./stockValueService').stocktake(current.row,deltaKg,l.surplusCost==null?null:Number(l.surplusCost)/current.capacityKg,doc.id+':pack:'+l.itemId,doc.date,t);
+    await current.packStock.update({boxes:actual},{transaction:t});await current.row.update({kg:nextKg},{transaction:t});await current.product.update({weightTotal:nextKg,quantity:Math.floor((nextKg+1e-8)/Number(current.product.weight))},{transaction:t});
+    assessment.deltaKg=deltaKg;
+   }else if(l.kind==='product'){
+    if(delta&&await M.PackStock.count({where:{packId:{[Op.in]:(await M.ProductPack.findAll({where:{productId:current.product.id},attributes:['id'],transaction:t})).map(p=>p.id)},boxes:{[Op.gt]:0}},transaction:t}))fail('Товар учитывается коробками: '+l.name+'. Начните пересчёт по фасовкам');
     if(actual<Number(current.row.reservedKg)-.00001)fail('Факт меньше резерва по заявкам: '+l.name+'. Сначала пересогласуйте заявки');
     assessment=await require('./stockValueService').stocktake(current.row,delta,l.surplusCost,doc.id,doc.date,t);
     await current.row.update({kg:actual},{transaction:t});await current.product.update({weightTotal:actual,quantity:Math.floor((actual+1e-8)/Number(current.product.weight))},{transaction:t});
