@@ -37,7 +37,7 @@ function ProductEditor({ product, onBack, onSaved, run, busy }) {
             <details className="op-help"><summary>Работа, плёнка и описание</summary><Field label="Плёнка на 1 коробку, метров" type="number" min="0" step="0.01" value={form.filmQtyM} onChange={e => change('filmQtyM', e.target.value)} />
             <Field label="Оплата работнику за кг, ₸" disabled={product?.wageRateLocked} type="number" min="0" step="0.01" value={form.priceForEmployee} onChange={e => change('priceForEmployee', e.target.value)} />
             <Field label="Описание покупателю"><textarea maxLength={1500} value={form.description} onChange={e => change('description', e.target.value)} /></Field>
-            <p className="op-field-hint">Цена за кг — своя у каждого товара. Из неё автоматически считаются цены коробок 2,5 / 2 / 1,1 / 1,5 кг. Изменить можно в «Упаковка → Коробки товаров».</p></details>
+            <p className="op-field-hint">Цена за кг — своя у каждого товара. Из неё автоматически считаются цены коробок 2,5 / 2 / 1,1 / 1,5 кг. Изменить можно в «Упаковка → Фасовки товаров».</p></details>
             <button disabled={busy || !form.name || !form.weight}>Сохранить</button>
         </form>
     </section>;
