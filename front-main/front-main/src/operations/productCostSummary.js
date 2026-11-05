@@ -1,3 +1,4 @@
+const {ingredientLines}=require('../../../../back-main/back-main/src/domain/recipeIngredients');
 const {selectFilm}=require('../../../../back-main/back-main/src/domain/filmSelection');
 const {calculationEstimate}=require('./calculationEstimate');
 const round=n=>Math.round((n+Number.EPSILON)*10000)/10000;
@@ -6,7 +7,9 @@ function productCostSummary(product,data,packId){
  const pack=(product.packs||[]).find(p=>String(p.id)===String(packId))||(product.packs||[])[0];
  const kg=Number(pack?.capacityKg||1),materials=data.materials||[],issues=[];
  if(!recipe?.lines?.length||!(Number(recipe.outputKg)>0))issues.push({kind:'recipe',label:'Добавьте состав товара'});
- const estimate=calculationEstimate({recipe,materials,kg,ratePerKg:0});
+ const costingRecipe=pack&&recipe?{...recipe,lines:ingredientLines(recipe,[...materials,...(data.archivedMaterials||[])])}:recipe;
+ if(recipe&&pack&&!costingRecipe.lines.length)issues.push({kind:'recipe',label:'Добавьте ингредиенты: упаковка учитывается отдельно'});
+ const estimate=calculationEstimate({recipe:costingRecipe,materials,kg,ratePerKg:0});
  const lines=estimate.lines.map(l=>{const archived=(data.archivedMaterials||[]).find(m=>String(m.id)===String(l.materialId));return {...l,name:archived?.name||l.name,unit:archived?.unit||l.unit,kind:'ingredient'};});
  if(pack){
   const box=materials.find(m=>String(m.id)===String(pack.boxMaterialId));
@@ -24,7 +27,7 @@ function productCostSummary(product,data,packId){
  const ingredients=round(lines.filter(l=>l.kind==='ingredient').reduce((s,l)=>s+l.cost,0));
  const packaging=round(lines.filter(l=>l.kind==='packaging').reduce((s,l)=>s+l.cost,0));
  const labor=pack?Number(pack.laborPerBox||0):Number(product.packKg)>0&&product.packLaborPerPack!=null?Number(product.packLaborPerPack)/Number(product.packKg):Number(product.priceForEmployee||0);
- const overhead=pack?Number(pack.overheadPerBox||0):Number(recipe?.overhead||0)/Number(recipe?.outputKg||1);
+ const overhead=Number(recipe?.overhead||0)/Number(recipe?.outputKg||1)*(pack?kg:1);
  const laborCost=Math.round((labor+Number.EPSILON)*100)/100,overheadCost=pack?Math.round((overhead+Number.EPSILON)*100)/100:round(overhead);
  const total=round(ingredients+packaging+laborCost+overheadCost),salePrice=pack?pack.salePrice:product.salePrice;
  return {pack,kg,recipe,lines,ingredients,packaging,labor:laborCost,overhead:overheadCost,total,costPerKg:round(total/kg),salePrice:salePrice==null?null:Number(salePrice),margin:salePrice==null?null:round(Number(salePrice)-total),issues,complete:issues.length===0};

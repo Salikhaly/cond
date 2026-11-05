@@ -54,6 +54,7 @@ async function authorize(req){
  }
  if(!permission&&!['me','dashboard','sync'].includes(segment))throw ApiError.forbiddenRequest('Раздел не разрешён владельцем');
  if(permission&&permission!=='requestsRead'&&!p[permission])throw ApiError.forbiddenRequest('Владелец не разрешил этот раздел');
+ if(write&&path.includes('/corrections')&&segment==='receipts'&&!p.adjustFinance)throw ApiError.forbiddenRequest('Исправление прихода разрешает владелец');
  if(write&&path.match(/^\/expenses\/[^/]+\/(classification|reverse)$/)&&!p.adjustFinance)throw ApiError.forbiddenRequest('Исправление финансовых записей разрешает владелец');
  if(write&&(segment==='cash'||segment==='payments'||segment==='advances'||segment==='return-credits'||path.endsWith('/settle')||path.match(/^\/receipts\/[^/]+\/pay$/))&&!p.cash)throw ApiError.forbiddenRequest('Не разрешена запись денежных выплат');
  if(segment==='cash'&&!p.finance)throw ApiError.forbiddenRequest('Финансовый журнал закрыт');

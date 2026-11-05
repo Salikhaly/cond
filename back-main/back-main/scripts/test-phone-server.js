@@ -13,7 +13,7 @@ let api, web;
 async function halt(p) { if (p && p.exitCode === null && p.signalCode === null) { const ended = new Promise(r => p.once('exit', r)); p.kill(); await ended; } }
 async function online() {
     api = spawn(process.execPath, ['src/index.js'], { windowsHide: true, stdio: ['ignore',fixtureLog,fixtureLog], env: { ...process.env, DB_NAME: database, HOST: '127.0.0.1', PORT: '3001', LOCAL_DEMO: 'true', SYNC_AUTO: 'false', SYNC_CLOUD_URL: '' } });
-    web = spawn(process.execPath, ['scripts/local-web.js'], { cwd: path.resolve('../../front-main/front-main'), windowsHide: true, stdio: ['ignore',fixtureLog,fixtureLog], env: { ...process.env, WEB_HOST: '127.0.0.1', WEB_PORT: '9001', API_PORT: '3001' } });
+    web = spawn(process.execPath, ['scripts/local-web.js'], { cwd: path.resolve('../../front-main/front-main'), windowsHide: true, stdio: ['ignore',fixtureLog,fixtureLog], env: { ...process.env, COND_SESSION_COOKIE:'cond_refresh_'+require('node:crypto').createHash('sha256').update(database).digest('hex').slice(0,12), WEB_HOST: '127.0.0.1', WEB_PORT: '9001', API_PORT: '3001' } });
     for (let i = 0; i < 300; i++) { try { if ((await fetch('http://127.0.0.1:3001/api/health')).ok) { console.log('ONLINE http://127.0.0.1:9001 database=' + database); return; } } catch {} await new Promise(r => setTimeout(r, 100)); }
     throw new Error('Fixture failed');
 }

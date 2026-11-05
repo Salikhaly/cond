@@ -1,3 +1,4 @@
+const baseUrl='http://127.0.0.1:'+Number(process.env.COND_TEST_PORT||3001);
 const {
   randomUUID
 } = require('crypto');
@@ -161,7 +162,7 @@ module.exports = async ({
     reference: 'Forbidden'
   }, 'POST', 403);
   const refundId = randomUUID();
-  const sendRefund = () => fetch('http://127.0.0.1:3001/api/operations/returns/' + r.id + '/settle', {
+  const sendRefund = () => fetch(baseUrl+'/api/operations/returns/' + r.id + '/settle', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -242,7 +243,7 @@ module.exports = async ({
         kg: 3
       }]
     });
-  const post = id => fetch('http://127.0.0.1:3001/api/operations/returns/' + id + '/post', {
+  const post = id => fetch(baseUrl+'/api/operations/returns/' + id + '/post', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -329,7 +330,7 @@ module.exports = async ({
   d = await dash();
   check(d.returns.filter(r => r.orderId === tinySale.id && r.status === 'posted').reduce((s, r) => s + Number(r.total), 0) === .01, 'Returns: partial fractional returns cannot refund more than rounded original price');
   const creditInvoice=await ship(shop.id,1);
-  const useCredit=()=>fetch('http://127.0.0.1:3001/api/operations/return-credits/'+credit.id+'/apply',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+admin,'X-Operation-Id':randomUUID()},body:JSON.stringify({orderId:creditInvoice.id,amount:100,confirmed:true,reference:'Проверка одновременного зачёта'})});
+  const useCredit=()=>fetch(baseUrl+'/api/operations/return-credits/'+credit.id+'/apply',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+admin,'X-Operation-Id':randomUUID()},body:JSON.stringify({orderId:creditInvoice.id,amount:100,confirmed:true,reference:'Проверка одновременного зачёта'})});
   const creditRace=await Promise.all([useCredit(),useCredit()]);
   check(creditRace.filter(r=>r.status===200).length===1&&creditRace.filter(r=>r.status===400).length===1,'Returns: concurrent credit applications cannot spend the same balance twice');
   const separate=await call(admin,'/operations/outlets',{name:'Возвраты · отдельный 1',customerName:'Возвраты · раздельный долг',debtScope:'outlet',address:'Тест 4',representativeId:rep.id});

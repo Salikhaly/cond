@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),{receiptCurrent,receiptPayment}=require('../src/operations/receiptCurrent');
+const original={id:'receipt',supplier:'Поставщик',total:100,lines:[{materialId:'a',quantity:10,unitCost:10}]};
+const corrections=[{receiptId:'receipt',version:1,after:{total:200,lines:[{materialId:'a',quantity:10,unitCost:20}]}},{receiptId:'other',version:4,after:{total:900}},{receiptId:'receipt',version:2,after:{total:300,lines:[{materialId:'a',quantity:15,unitCost:20}]}}];
+const actual=receiptCurrent(original,corrections);
+assert.equal(actual.total,300);assert.equal(actual.lines[0].quantity,15);assert.equal(actual.originalTotal,100);assert.equal(original.total,100);assert.equal(corrections[0].version,1);
+assert.deepEqual(receiptPayment(1000,200,'full',0),{advanceApplied:200,due:800,payment:800,remaining:0});
+assert.deepEqual(receiptPayment(1000,200,'partial',300),{advanceApplied:200,due:800,payment:300,remaining:500});
+assert.deepEqual(receiptPayment(1000,1200,'full',0),{advanceApplied:1000,due:0,payment:0,remaining:0});
+assert.deepEqual(receiptPayment(1000,200,'later',300),{advanceApplied:200,due:800,payment:0,remaining:800});
+assert.deepEqual(receiptPayment(10.03,0.01,'full',0),{advanceApplied:0.01,due:10.02,payment:10.02,remaining:0});
+const {receiptAnalytics}=require('../src/operations/receiptAnalytics');
+const analytics=receiptAnalytics([{...original,date:'2026-11-05',document:'ONE'}],[],[{id:'a',name:'Материал'}],{corrections});
+assert.equal(analytics.totals.amount,300);assert.equal(analytics.totals.pieces,15);assert.equal(analytics.rows,1);
+console.log('9 receipt view, corrected analytics and advance checks passed');

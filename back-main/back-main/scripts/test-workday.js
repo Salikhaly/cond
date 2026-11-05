@@ -1,3 +1,4 @@
+const baseUrl='http://127.0.0.1:'+Number(process.env.COND_TEST_PORT||3001);
 const {randomUUID}=require('node:crypto');
 const {reports}=require('../../../front-main/front-main/src/operations/reportMetrics');
 const {payrollMetrics}=require('../../../front-main/front-main/src/operations/payrollMetrics');
@@ -11,7 +12,7 @@ module.exports=async({call,check,admin,firm,dash,d})=>{
     const rep=await call(firm,'/operations/me');
     const shop=await call(admin,'/operations/outlets',{customerName:'Рабочий день · клиент',name:'Рабочий день · магазин',address:'Тестовый адрес, 10',representativeId:rep.id});
     const opId=randomUUID(),body={supplier:'Рабочий день · поставщик',document:'WORKDAY-RECEIPT',date,paid:true,lines:[{materialId:material.id,quantity:20,unitCost:100}]};
-    const send=async()=>{const r=await fetch('http://127.0.0.1:3001/api/operations/receipts',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+admin,'X-Operation-Id':opId},body:JSON.stringify(body)});if(!r.ok)throw Error(await r.text());return r.json();};
+    const send=async()=>{const r=await fetch(baseUrl+'/api/operations/receipts',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+admin,'X-Operation-Id':opId},body:JSON.stringify(body)});if(!r.ok)throw Error(await r.text());return r.json();};
     const receipts=await Promise.all([send(),send()]);
     let data=await dash();
     check(receipts[0].id===receipts[1].id&&Number(data.materials.find(m=>m.id===material.id).quantity)===20,'Workday: repeated receipt click records 20 kg and one document');

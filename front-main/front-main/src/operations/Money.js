@@ -3,7 +3,7 @@ import {api,today,moneyFmt} from './api';
 import {Field,Table,Empty} from './Fields';
 import {moneyMetrics} from './moneyMetrics';
 import {workbook,download} from './reportExport';
-const methods={cash:'Наличные',kaspi:'Карта / Kaspi',bank:'Банк',unknown:'Способ не указан'};
+const methods={cash:'Наличные',kaspi:'Kaspi',bank:'Другой',unknown:'Способ не указан'};
 export default function Money({data,onNavigate}){
  const [ledger,setLedger]=useState(null),[error,setError]=useState(''),[from,setFrom]=useState(today().slice(0,7)+'-01'),[to,setTo]=useState(today()),[method,setMethod]=useState(''),[category,setCategory]=useState(null),[view,setView]=useState('categories');
  useEffect(()=>{let active=true;api('/money').then(d=>{if(active){setLedger(d);setError('');}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[data]);

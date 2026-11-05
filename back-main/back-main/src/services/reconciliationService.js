@@ -16,14 +16,16 @@ module.exports = async user => {
         }
         for(const e of costEvents){
             if(Number(e.value)<0||Number(e.knownKg)<0||Number(e.knownKg)>Number(e.kg)+.00011)issues.push('Некорректная сохранённая стоимость '+e.id);
-            if(e.kind==='shipment'){const order=orders.find(o=>o.id===e.orderId),line=order?.lines.find(l=>l.productId===e.productId);if(!line||order.status!=='shipped'||!close(line.kg,e.kg))issues.push('Стоимость не совпадает с отгрузкой '+e.id);}
+            if(e.kind==='shipment'){const order=orders.find(o=>o.id===e.orderId),lines=order?.lines.filter(l=>l.productId===e.productId)||[];if(!lines.length||order.status!=='shipped'||!close(lines.reduce((s,l)=>s+Number(l.kg),0),e.kg))issues.push('Стоимость не совпадает с отгрузкой '+e.id);}
             if(e.kind==='production'){const p=productions.find(p=>'production:'+p.id===e.id);if(!p||p.status!=='posted'||!close(p.totalCost,e.value)||!close(p.kg,e.kg))issues.push('Стоимость не совпадает с выпуском '+e.id);}
         }
+        const receiptCorrections=await read(M.ReceiptCorrection);
         for (const m of materials) {
             const incoming = receipts.filter(r => r.materialId === m.id).reduce((s, r) => s + Number(r.quantity), 0);
             const consumed = productions.filter(p => p.status === 'posted').reduce((s, p) => s + [...(p.snapshot?.lines || []),...(p.snapshot?.packagingLines || [])].filter(l => l.materialId === m.id).reduce((n, l) => n + Number(l.quantity), 0), 0);
+            const receiptDelta=receiptCorrections.reduce((s,c)=>s+(c.effects||[]).filter(e=>e.materialId===m.id).reduce((n,e)=>n+Number(e.quantityDelta),0),0);
             const adjustments=stockCounts.filter(d=>d.status==='posted').reduce((s,d)=>s+d.lines.filter(l=>l.kind==='material'&&l.itemId===m.id).reduce((a,l)=>a+Number(l.delta),0),0);
-            if (!close(incoming - consumed + adjustments, m.quantity)) issues.push(`Материал «${m.name}»: приход минус списание не равен остатку`);
+            if (!close(incoming - consumed + adjustments + receiptDelta, m.quantity)) issues.push(`Материал «${m.name}»: приход минус списание не равен остатку`);
         }
         for (const s of stocks) {
             const product = products.find(p => p.id === s.productId);
@@ -87,7 +89,7 @@ module.exports = async user => {
             if(e.status==='reversed'&&cash.filter(r=>r.reversalOf===e.id).length!==1)issues.push('Нет единственной записи отмены оплаты '+e.id);
             if(e.outcomeId){const out=await require('../models/models').Outcome.findByPk(e.outcomeId,{transaction:t});const expected=e.kind==='reversal'?-Number(e.amount):Number(e.amount);if(!out||!close(out.totalAmount,expected,.011))issues.push('Оплата поставщику не совпадает с расходом '+e.id);}
         }
-        for(const r of receiptDocuments){const paid=finance.documentPaid(cashData,'receipt',r.id);if(paid>Number(r.total)+.011||Number(r.total)>0&&Boolean(r.paid)!==(paid>=Number(r.total)-.001))issues.push('Приход: статус или сумма оплаты не совпадают с журналом '+r.id);}
+        for(const r of receiptDocuments){const paid=finance.documentPaid(cashData,'receipt',r.id),total=require('../domain/supplierReceiptBalance').receiptTotal(cashData,r);if(paid>total+.011||total>0&&Boolean(r.paid)!==(paid>=total-.001))issues.push('Приход: статус или сумма оплаты не совпадают с журналом '+r.id);}
         for(const o of orders.filter(o=>o.status==='shipped'))if(finance.documentPaid(cashData,'order',o.id)+finance.orderCredits(cashData,o.id)>Number(o.total)+.011)issues.push('Оплаты и зачёты превышают сумму отгрузки '+o.id);
         return { checkedAt: new Date().toISOString(), ok: issues.length === 0, issues, counts: { materials: materials.length, products: products.length, productions: productions.filter(p => p.status === 'posted').length, payments: payments.length, orders: orders.length }, scope: 'Сверка данных текущей базы: материалы, остатки, резервы, новые выпуски со старыми отчётами, выплаты с авансами. Исторические данные клиента из другой базы не проверялись.' };
     });

@@ -148,8 +148,8 @@ export default function Workspace() {
                     {allowedTab==='inventory'&&<StockCounts onNavigate={selectTab} initialAction={intent} data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab === 'overview' && <Overview data={data} setTab={selectTab} user={user} onSearch={()=>setSearchOpen(true)}/>}
                     {allowedTab === 'approvals' && <ApprovalsScreen data={data} user={user} onNavigate={selectTab} />}
-                    {allowedTab === 'materials' && <Materials onPaySupplier={id=>selectTab('suppliers',{kind:'receipt-payment',id})} data={data} run={run} initialAction={intent} busy={busy || Boolean(data?.sync?.readOnly)} />}
-                    {allowedTab === 'packaging' && <Packaging data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
+                    {allowedTab === 'materials' && <Materials onNavigate={selectTab} onPaySupplier={id=>selectTab('suppliers',{kind:'receipt-payment',id})} data={data} run={run} initialAction={intent} busy={busy || Boolean(data?.sync?.readOnly)} />}
+                    {allowedTab === 'packaging' && <Packaging onNavigate={selectTab} data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'recipes' && <Recipes initialAction={intent} onNavigate={selectTab} data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'production' && <Production onNavigate={selectTab} data={data} user={user} run={run} initialAction={intent} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'orders' && <Orders onNavigate={selectTab} onReturn={id=>selectTab('returns',{kind:'return',orderId:id})} initialAction={intent} data={data} user={user} run={run} busy={busy || Boolean(data?.sync?.readOnly)} initialOutlet={orderOutlet} onShops={()=>selectTab('shops')} />}

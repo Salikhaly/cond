@@ -9,6 +9,7 @@ function resultRows(data,from,to,kind='sales',includeCounts=false){
  for(const r of data.dailyPay||[])if(r.status==='posted'&&inside(r.date))operating.push(payrollRow(r,r.date,r.amount,'Дневное начисление'));
  for(const r of data.repAccruals||[])if(inside(monthEnd(r.month)))operating.push(payrollRow(r,monthEnd(r.month),r.delta,'Месячное начисление'));
  for(const r of data.wageAdjustments||[])if(inside(r.date))operating.push(payrollRow(r,r.date,r.amount,'Корректировка зарплаты'));
+ for(const c of data.receiptCorrections||[])if(inside(c.date)&&Number(c.operatingDelta))operating.push({id:'receipt-correction:'+c.id,date:c.date,title:'Корректировка стоимости закупки',note:c.reason,amount:Number(c.operatingDelta),complete:true,source:c,target:{section:'materials',action:{kind:'receipt-correction',id:c.receiptId}}});
  let rows=kind==='sales'?sales:kind==='cost'?costs:kind==='operating'?operating:[...sales,...costs.map(r=>({...r,amount:-r.amount})),...operating.map(r=>({...r,amount:-r.amount}))];
  if(kind==='result'){
   for(const r of data.costEvents||[])if(r.kind==='return-scrap'&&inside(day(r.date)))rows.push({id:'scrap:'+r.id,date:day(r.date),title:'Списание возврата',note:'Потеря по себестоимости',amount:-Number(r.value),complete:Number(r.kg)-Number(r.knownKg)<.00011,source:r,target:r.returnId?{section:'returns',action:{kind:'return-document',id:r.returnId}}:null});

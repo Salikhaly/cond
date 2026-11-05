@@ -4,8 +4,8 @@ const M = require('../models/operations');
 const { State } = require('../models/sync');
 
 const marker = 'schema:box-packs:v1';
-const baseMarker = 'schema:box-packs:v2';
-const baseCapacities = [2.5, 1.5, 1.1, 2];
+const baseMarker = 'schema:box-packs:v3';
+const baseCapacities = [1, 1.5, 2, 2.5];
 
 const number = value => Math.round((Number(value) + Number.EPSILON) * 10000) / 10000;
 const parseCapacity = name => {
@@ -117,7 +117,7 @@ async function ensureBasePacks() {
             return box;
         };
         for (const product of products) {
-            if (!recipes.some(recipe => Number(recipe.productId) === Number(product.id))) continue;
+            if (product.is_active === false) continue;
             const pricePerKg = selling.find(row => Number(row.productId) === Number(product.id))?.price;
             for (const capacity of baseCapacities) {
                 const box = await ensureBox(capacity);
@@ -140,4 +140,4 @@ async function ensureBasePacks() {
     });
 }
 
-module.exports = { ensure, ensureBasePacks, marker, baseMarker };
+module.exports = { ensure, ensureBasePacks, marker, baseMarker, baseCapacities };

@@ -6,23 +6,26 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const database = `cond_test_${Date.now()}`;
 const db = new Client({ host: process.env.DB_HOST, port: process.env.DB_PORT, user: process.env.DB_USER, password: process.env.DB_PASSWORD, database: 'postgres' });
+const port=Number(process.env.COND_TEST_PORT||3001);
+if(!Number.isInteger(port)||port<1024||port>65535)throw Error('Invalid isolated test port');
+const baseUrl='http://127.0.0.1:'+port;
 let server;
 let count = 0;
 const check = (condition, label) => { assert.ok(condition, label); console.log('PASS ' + label); count++; };
 async function main() {
     await db.connect();
     let occupied = false;
-    try { await fetch('http://127.0.0.1:3001/api/health'); occupied = true; } catch {}
-    if (occupied) throw new Error('Port 3001 already occupied. Stop the browser fixture first.');
+    try { await fetch(baseUrl+'/api/health'); occupied = true; } catch {}
+    if (occupied) throw new Error('Isolated test port already occupied: '+port);
     await db.query(`CREATE DATABASE "${database}"`);
     let logs = '';
-    server = spawn(process.execPath, ['src/index.js'], { cwd: path.resolve(__dirname, '..'), windowsHide: true, env: { ...process.env, DB_NAME: database, PORT: '3001', HOST: '127.0.0.1', LOCAL_DEMO: 'true', SQL_LOG: 'false' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    server = spawn(process.execPath, ['src/index.js'], { cwd: path.resolve(__dirname, '..'), windowsHide: true, env: { ...process.env, DB_NAME: database, PORT: String(port), HOST: '127.0.0.1', LOCAL_DEMO: 'true', SQL_LOG: 'false' }, stdio: ['ignore', 'pipe', 'pipe'] });
     server.stdout.on('data', b => { logs = (logs + b).slice(-5000); }); server.stderr.on('data', b => { logs = (logs + b).slice(-5000); });
     let ready = false;
-    for (let i = 0; i < 300; i++) { try { const r = await fetch('http://127.0.0.1:3001/api/health'); if (r.ok) { ready = true; break; } } catch {} await new Promise(r => setTimeout(r, 200)); }
+    for (let i = 0; i < 300; i++) { try { const r = await fetch(baseUrl+'/api/health'); if (r.ok) { ready = true; break; } } catch {} await new Promise(r => setTimeout(r, 200)); }
     if (!ready) throw new Error('Test server failed: ' + logs);
     const call = async (token, route, body, method, expected = 200) => {
-        const r = await fetch('http://127.0.0.1:3001/api' + route, { method: method || (body === undefined ? 'GET' : 'POST'), headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+        const r = await fetch(baseUrl+'/api' + route, { method: method || (body === undefined ? 'GET' : 'POST'), headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
         const data = await r.json(); assert.equal(r.status, expected, route + ': ' + JSON.stringify(data)); return data;
     };
     const login = async email => (await call(null, '/operations/session', { email, password: 'Local2026!demo' })).accessToken;
@@ -114,20 +117,20 @@ async function main() {
     const exchange = await call(admin, '/operations/exchange');
     check(exchange.schema === 'cond.exchange.v1' && !JSON.stringify(exchange).includes('password') && !('Token' in exchange), 'Exchange contains stable data without credentials');
     await call(firm, '/operations/exchange', undefined, 'GET', 403);
-    const cookieLogin = await fetch('http://127.0.0.1:3001/api/operations/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@local.test', password: 'Local2026!demo' }) });
+    const cookieLogin = await fetch(baseUrl+'/api/operations/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@local.test', password: 'Local2026!demo' }) });
     const cookie = cookieLogin.headers.get('set-cookie').split(';')[0];
     const scopedName = 'cond_refresh_' + require('node:crypto').createHash('sha256').update(database).digest('hex').slice(0, 12);
-    const wrongScope = await fetch('http://127.0.0.1:3001/api/auth/refresh', { headers: { Cookie: cookie.replace(scopedName, 'cond_refresh_another_database') } });
-    const noCookieLogout = await fetch('http://127.0.0.1:3001/api/auth/logout', { method: 'POST' });
+    const wrongScope = await fetch(baseUrl+'/api/auth/refresh', { headers: { Cookie: cookie.replace(scopedName, 'cond_refresh_another_database') } });
+    const noCookieLogout = await fetch(baseUrl+'/api/auth/logout', { method: 'POST' });
     check(cookie.startsWith(scopedName + '=') && wrongScope.status === 401 && noCookieLogout.ok, 'Parallel local databases use separate refresh cookies; logout tolerates an expired cookie');
-    await fetch('http://127.0.0.1:3001/api/auth/logout', { method: 'POST', headers: { Cookie: cookie } });
-    const refresh = await fetch('http://127.0.0.1:3001/api/auth/refresh', { headers: { Cookie: cookie } });
+    await fetch(baseUrl+'/api/auth/logout', { method: 'POST', headers: { Cookie: cookie } });
+    const refresh = await fetch(baseUrl+'/api/auth/refresh', { headers: { Cookie: cookie } });
     check(refresh.status === 401, 'Logged out refresh token cannot restore a session');
     // Restart bridge twice to prove it never duplicates original reports/advances.
     const inspectDb = new Client({ host: process.env.DB_HOST, port: process.env.DB_PORT, user: process.env.DB_USER, password: process.env.DB_PASSWORD, database });
     await inspectDb.connect();
     await inspectDb.query('INSERT INTO verfcodes (email, code, "isActive", "createdAt", "updatedAt") VALUES ($1, $2, true, now(), now())', ['worker@local.test', '123456']);
-    const activate = () => fetch('http://127.0.0.1:3001/api/auth/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'worker@local.test', code: '123456' }) });
+    const activate = () => fetch(baseUrl+'/api/auth/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'worker@local.test', code: '123456' }) });
     const activationResults = await Promise.all([activate(), activate()]);
     check(activationResults.filter(r => r.status === 200).length === 1 && activationResults.filter(r => r.status === 400).length === 1, 'Email verification code can only be consumed once, even concurrently');
     check(!(await call(admin, '/profile/employees')).some(u => 'password' in u), 'Original employee listing excludes password hashes');
@@ -157,7 +160,7 @@ async function main() {
     check((await call(admin, '/operations/reconciliation')).ok, 'Reconciliation also passes after fractional production');
     const { randomUUID } = require('node:crypto');
     const mobile = async (route, body, id) => {
-        const response = await fetch('http://127.0.0.1:3001/api/operations' + route, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + admin, 'X-Operation-Id': id }, body: JSON.stringify(body) });
+        const response = await fetch(baseUrl+'/api/operations' + route, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + admin, 'X-Operation-Id': id }, body: JSON.stringify(body) });
         return { status: response.status, data: await response.json() };
     };
     const receiptKey = randomUUID(), receiptBody = { materialId: flour.id, quantity: 1, unitCost: 10, date: d };
@@ -194,16 +197,16 @@ async function main() {
     await call(admin, `/operations/users/${adminId}/access`, {disabled:true}, 'PATCH', 403);
     await call(worker, `/operations/users/${colleague.id}/access`, {disabled:true}, 'PATCH', 403);
     check(true, 'Users cannot alter access rights and admin cannot accidentally block own account');
-    const deviceA = await fetch('http://127.0.0.1:3001/api/operations/session', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'access@local.test',password:'Local2026!demo'})});
+    const deviceA = await fetch(baseUrl+'/api/operations/session', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'access@local.test',password:'Local2026!demo'})});
     const cookieA = deviceA.headers.get('set-cookie').split(';')[0], dataA = await deviceA.json();
     const deviceB = await login('access@local.test');
     await call(dataA.accessToken, '/operations/me'); await call(deviceB, '/operations/me');
-    const refreshA = await fetch('http://127.0.0.1:3001/api/auth/refresh',{headers:{Cookie:cookieA}});
+    const refreshA = await fetch(baseUrl+'/api/auth/refresh',{headers:{Cookie:cookieA}});
     check(refreshA.status === 200, 'Phone and laptop sessions coexist and refresh independently');
-    await fetch('http://127.0.0.1:3001/api/auth/logout',{method:'POST',headers:{Cookie:cookieA}});
+    await fetch(baseUrl+'/api/auth/logout',{method:'POST',headers:{Cookie:cookieA}});
     await call(dataA.accessToken, '/operations/me',undefined,'GET',401); await call(deviceB, '/operations/me');
     check(true, 'Logout immediately revokes that access token while another device stays signed in');
-    const badOrigin = await fetch('http://127.0.0.1:3001/api/operations/preview',{method:'POST',headers:{Origin:'https://evil.example',Authorization:'Bearer '+admin,'Content-Type':'application/json'},body:JSON.stringify({productId:product.id,kg:1})});
+    const badOrigin = await fetch(baseUrl+'/api/operations/preview',{method:'POST',headers:{Origin:'https://evil.example',Authorization:'Bearer '+admin,'Content-Type':'application/json'},body:JSON.stringify({productId:product.id,kg:1})});
     check(badOrigin.status === 403, 'Unexpected website origin cannot execute authenticated actions');
     const { overviewMetrics } = require('../../../front-main/front-main/src/operations/overviewMetrics');
     const sample = {products:[{id:1,name:'A',kg:10,reservedKg:3,availableKg:7}],materials:[{quantity:2,unitCost:100},{quantity:5,unitCost:4}],payroll:[{total_amount:1000,advanced_amount:300}],orders:[{status:'submitted',createdAt:'2026-10-22T00:00:00Z'},{status:'approved',createdAt:'2026-10-01'}],workers:[{id:1}],productions:[{status:'posted',workerId:1,kg:4,laborCost:600,totalCost:1200,date:d},{status:'draft',kg:999,date:d}],incomes:[{productId:1,totalAmount:500,totalWeight:2,date:'2026-10-21T20:00:00Z'},{productId:1,totalAmount:999,totalWeight:99,date:'2026-10-21T12:00:00Z'}],outcomes:[{totalAmount:200,date:d}]};

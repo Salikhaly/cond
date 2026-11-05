@@ -1,3 +1,4 @@
+const {receiptTotal,rawPaid,supplierProjection}=require('../domain/supplierReceiptBalance');
 const db=require('../database/sequelize'),M=require('../models/operations');
 const {Product,Outcome,OutcomeCategory}=require('../models/models');
 const {Op}=require('sequelize');
@@ -19,15 +20,14 @@ function groupOrder(order,destination,customers){
 }
 async function readData(t){
     const read=async model=>(await model.findAll({transaction:t})).map(plain);
-    const [orders,destinations,customers,receipts,suppliers,entries,allocations,receiptFinance,settlements,credits,returns,outlets,debts]=await Promise.all([M.Order,M.Destination,M.Customer,M.ReceiptDocument,M.Supplier,M.CashEntry,M.CashAllocation,M.ReceiptFinance,M.ReturnSettlement,M.CreditUse,M.GoodsReturn,M.Outlet,M.ClientDebt].map(read));
-    return {orders,destinations,customers,receipts,suppliers,entries,allocations,receiptFinance,settlements,credits,returns,outlets,debts};
+    const [orders,destinations,customers,receipts,suppliers,entries,allocations,receiptFinance,settlements,credits,returns,outlets,debts,corrections]=await Promise.all([M.Order,M.Destination,M.Customer,M.ReceiptDocument,M.Supplier,M.CashEntry,M.CashAllocation,M.ReceiptFinance,M.ReturnSettlement,M.CreditUse,M.GoodsReturn,M.Outlet,M.ClientDebt,M.ReceiptCorrection].map(read));
+    return {orders,destinations,customers,receipts,suppliers,entries,allocations,receiptFinance,settlements,credits,returns,outlets,debts,corrections};
 }
 function documentPaid(d,type,id){
     const active=d.entries.filter(e=>['trade','opening-credit'].includes(e.kind)&&e.status==='posted').map(e=>e.id);
     const paid=d.allocations.filter(a=>a.documentType===type&&a.documentId===id&&active.includes(a.entryId)).reduce((s,a)=>s+Number(a.amount),0);
     if(type==='receipt'){
-        const r=d.receipts.find(r=>r.id===id),meta=d.receiptFinance.find(f=>f.receiptId===id);
-        return money(paid+(meta?Number(meta.basePaid):r?.paid?Number(r.total):0));
+        const r=d.receipts.find(r=>r.id===id);return r? supplierProjection(d,r.supplier)[id]?.paid||0:0;
     }
     return money(paid);
 }
@@ -54,9 +54,10 @@ function summarize(d,now=new Date()){
     }
     const clients=[...groups.values()].map(g=>({...g,debt:money(Math.max(0,(g.opening||0)+g.sales-g.adjustments-g.paid)),advance:money(Math.max(0,g.paid+g.adjustments-g.sales-(g.opening||0)))}));
     const suppliers=d.suppliers.map(s=>{
-        const documents=d.receipts.filter(r=>r.supplier===s.name).map(r=>({...r,basePaid:Number(d.receiptFinance.find(f=>f.receiptId===r.id)?.basePaid ?? (r.paid?Number(r.total):0)),paidAmount:documentPaid(d,'receipt',r.id)})).map(r=>({...r,debt:money(Math.max(0,Number(r.total)-r.paidAmount))}));
-        const purchases=money(documents.reduce((n,r)=>n+Number(r.total),0)),paid=money(documents.reduce((n,r)=>n+r.paidAmount,0));
-        return {...s,key:'supplier:'+s.id,documents,purchases,paid,debt:money(purchases-paid)};
+        const projection=supplierProjection(d,s.name),source=d.receipts.filter(r=>r.supplier===s.name);
+        const documents=source.map(r=>{const total=receiptTotal(d,r),paidAmount=projection[r.id]?.paid||0;return {...r,originalTotal:Number(r.total),total,basePaid:Number(d.receiptFinance.find(f=>f.receiptId===r.id)?.basePaid??(r.paid?r.total:0)),paidAmount,advanceApplied:projection[r.id]?.advanceApplied||0,debt:money(Math.max(0,total-paidAmount)),corrections:(d.corrections||[]).filter(c=>c.receiptId===r.id)};});
+        const purchases=money(documents.reduce((n,r)=>n+r.total,0)),paid=money(source.reduce((n,r)=>n+rawPaid(d,r),0));
+        return {...s,key:'supplier:'+s.id,documents,purchases,paid,debt:money(Math.max(0,purchases-paid)),advance:money(Math.max(0,paid-purchases))};
     });
     clients.sort((a,b)=>b.debt-a.debt||a.name.localeCompare(b.name));suppliers.sort((a,b)=>b.debt-a.debt||a.name.localeCompare(b.name));
     return {clients,suppliers,clientDocuments,asOf:today,entries:d.entries,allocations:d.allocations};
@@ -112,11 +113,11 @@ async function allocation(entry,input,t){
         }else{
             const supplier=d.suppliers.find(s=>'supplier:'+s.id===entry.partyKey);if(!supplier||supplier.name!==doc.supplier)throw ApiError.badRequest('Приход другого поставщика');
         }
-        const documentType=doc.partyKey?'balance':type,paid=documentPaid(d,documentType,doc.id),credit=type==='order'&&!doc.partyKey?orderCredits(d,doc.id):0;
-        if(row.amount>money(Number(doc.total)-paid-credit)+.001)throw ApiError.badRequest('Сумма превышает остаток по документу');
+        const documentType=doc.partyKey?'balance':type,paid=documentPaid(d,documentType,doc.id),effectiveTotal=type==='receipt'?receiptTotal(d,plain(doc)):Number(doc.total),credit=type==='order'&&!doc.partyKey?orderCredits(d,doc.id):0;
+        if(row.amount>money(effectiveTotal-paid-credit)+.001)throw ApiError.badRequest('Сумма превышает остаток по документу');
         const existing=await M.CashAllocation.findOne({where:{entryId:entry.id,documentType,documentId:doc.id},transaction:t});
         if(existing)await existing.increment('amount',{by:row.amount,transaction:t});else await M.CashAllocation.create({entryId:entry.id,documentType,documentId:doc.id,amount:row.amount},{transaction:t});
-        if(type==='receipt')await doc.update({paid:money(paid+row.amount)>=Number(doc.total)-.001},{transaction:t});
+        if(type==='receipt')await doc.update({paid:money(paid+row.amount)>=effectiveTotal-.001},{transaction:t});
     }
 }
 async function payment(user,b,outer,legacy=false){admin(user);return db.transaction(outer?{transaction:outer}:{},async t=>{
@@ -144,13 +145,19 @@ async function reverse(user,id,b){admin(user);const reason=text(b.reason,'при
     if(e.kind!=='opening-credit'&&!await require('./moneyService').copyAssignment('cash:'+e.id,'cash:'+reversed.id,user,t))await require('./moneyService').assign('cash:'+reversed.id,{method:e.method},user,t);
     await e.update({status:'reversed'},{transaction:t});
     if(e.outcomeId){const original=await Outcome.findByPk(e.outcomeId,{transaction:t});const out=await Outcome.create({recipient:e.partyName,name:'Отмена оплаты: '+reason.slice(0,150),unitPrice:-Number(e.amount),quantity:1,totalAmount:-Number(e.amount),outcomeCategoryId:original.outcomeCategoryId,date:reversed.date},{transaction:t});await reversed.update({outcomeId:out.id},{transaction:t});}
-    const d=await readData(t);for(const a of d.allocations.filter(a=>a.entryId===id&&a.documentType==='receipt')){const doc=await M.ReceiptDocument.findByPk(a.documentId,{transaction:t,lock:t.LOCK.UPDATE});await doc.update({paid:documentPaid(d,'receipt',doc.id)>=Number(doc.total)-.001},{transaction:t});}
+    const d=await readData(t);for(const a of d.allocations.filter(a=>a.entryId===id&&a.documentType==='receipt')){const doc=await M.ReceiptDocument.findByPk(a.documentId,{transaction:t,lock:t.LOCK.UPDATE});await doc.update({paid:documentPaid(d,'receipt',doc.id)>=receiptTotal(d,plain(doc))-.001},{transaction:t});}
+    if(e.direction==='out')await syncSupplierStatuses(e.partyName,t);
     return reversed;
 });}
+async function syncSupplierStatuses(name,t){
+ const docs=await M.ReceiptDocument.findAll({where:{supplier:name},transaction:t});
+ for(const r of docs)await M.ReceiptFinance.findOrCreate({where:{receiptId:r.id},defaults:{basePaid:r.paid?Number(r.total):0},transaction:t});
+ const d=await readData(t);for(const r of docs)await r.update({paid:documentPaid(d,'receipt',r.id)>=receiptTotal(d,plain(r))-.001},{transaction:t});
+}
 async function payReceipt(user,id,b){admin(user);return db.transaction(async t=>{
     const r=await M.ReceiptDocument.findByPk(id,{transaction:t});if(!r)throw ApiError.notFound('Приход не найден');
     const [s]=await M.Supplier.findOrCreate({where:{name:r.supplier},transaction:t});
-    await lockParty('supplier:'+s.id,t);const d=await readData(t),due=money(Number(r.total)-documentPaid(d,'receipt',r.id));
+    await lockParty('supplier:'+s.id,t);const d=await readData(t),due=money(receiptTotal(d,plain(r))-documentPaid(d,'receipt',r.id));
     if(due<=.001)throw ApiError.badRequest('Этот приход уже оплачен');
     await payment(user,{partyType:'supplier',partyId:s.id,amount:b.amount??due,date:b.date,method:b.method,accountId:b.accountId,comment:b.comment||'Оплата прихода '+r.document,allocations:[{documentId:id,amount:b.amount??due}]},t,true);
     return M.ReceiptDocument.findByPk(id,{transaction:t});
@@ -177,7 +184,7 @@ async function quotePack(customerId,outletId,pack,onDate,t){
 async function terms(user,id,b){admin(user);if(!await M.Order.findByPk(id))throw ApiError.notFound('Заявка не найдена');return M.OrderTerms.upsert({orderId:id,dueDate:b.dueDate?date(b.dueDate):null});}
 function extras(d){
  const result=summarize(d),receiptPaidAmounts=Object.fromEntries(d.receipts.map(r=>[r.id,documentPaid(d,'receipt',r.id)]));
- return {cashEntries:d.entries,receiptPaidAmounts,supplierDefaults:(d.suppliers||[]).map(s=>({id:s.id,name:s.name,defaultUnitsPerPack:s.defaultUnitsPerPack??null})),tradeTotals:{customerDebt:money(result.clients.reduce((s,c)=>s+c.debt,0)),customerAdvance:money(result.clients.reduce((s,c)=>s+c.advance,0)),supplierDebt:money(d.receipts.reduce((s,r)=>s+Math.max(0,Number(r.total)-receiptPaidAmounts[r.id]),0))}};
+ return {cashEntries:d.entries,receiptPaidAmounts,supplierDefaults:(d.suppliers||[]).map(s=>({id:s.id,name:s.name,defaultUnitsPerPack:s.defaultUnitsPerPack??null,advance:result.suppliers.find(p=>p.id===s.id)?.advance||0})),tradeTotals:{customerDebt:money(result.clients.reduce((s,c)=>s+c.debt,0)),customerAdvance:money(result.clients.reduce((s,c)=>s+c.advance,0)),supplierDebt:money(result.suppliers.reduce((s,r)=>s+r.debt,0)),supplierAdvance:money(result.suppliers.reduce((s,r)=>s+r.advance,0))}};
 }
 async function availableForOrder(id,t){const d=await readData(t),o=d.orders.find(o=>o.id===id);if(!o)throw ApiError.notFound('Накладная не найдена');return money(Math.max(0,Number(o.total)-documentPaid(d,'order',id)-orderCredits(d,id)));}
 function oldest(value,documents){let left=Math.round(Number(value)*100);return [...documents].filter(d=>Number(d.due)>0).sort((a,b)=>String(a.date||a.deliveryDate||'').localeCompare(String(b.date||b.deliveryDate||''))||a.id.localeCompare(b.id)).flatMap(d=>{const cents=Math.min(left,Math.round(d.due*100));left-=cents;return cents>0?[{documentId:d.id,amount:cents/100}]:[];});}
@@ -186,4 +193,4 @@ async function applyAdvance(order,t){const d=await readData(t),destination=d.des
 async function applyForParty(key,t){const d=await readData(t);for(const entry of d.entries.filter(e=>e.partyKey===key&&e.direction==='in'&&['trade','opening-credit'].includes(e.kind)&&e.status==='posted').sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id))){const current=await readData(t),left=money(Number(entry.amount)-current.allocations.filter(a=>a.entryId===entry.id).reduce((n,a)=>n+Number(a.amount),0)),party=summarize(current).clients.find(c=>c.key===key);if(left>.001){const rows=oldest(left,party?.documents||[]);if(rows.length)await allocation(entry,rows,t);}}}
 async function opening(user,b){await require('./authorityService').owner(user);return db.transaction(async t=>{const p=await party(b,t);if(p.direction!=='in')throw ApiError.badRequest('Выберите клиента');await lockParty(p.key,t);const value=amount(b.amount),reason=text(b.reason,'причину');if(b.kind==='credit'){const row=await M.CashEntry.create({kind:'opening-credit',direction:'in',partyKey:p.key,partyName:p.name,amount:value,date:date(b.date),method:'unknown',comment:reason,actorId:user.id,actorName:user.name},{transaction:t});const docs=summarize(await readData(t)).clients.find(c=>c.key===p.key)?.documents||[];await allocation(row,oldest(value,docs),t);return row;}if(b.kind!=='debt')throw ApiError.badRequest('Выберите долг или аванс');const debt=await M.ClientDebt.create({partyKey:p.key,partyName:p.name,total:value,date:date(b.date),reason,actorId:user.id,actorName:user.name},{transaction:t});await applyForParty(p.key,t);return debt;});}
 async function cancelOpening(user,id,b){await require('./authorityService').owner(user);return db.transaction(async t=>{const first=await M.ClientDebt.findByPk(id,{transaction:t});if(!first)throw ApiError.notFound('Долг не найден');await lockParty(first.partyKey,t);const debt=await M.ClientDebt.findByPk(id,{transaction:t,lock:t.LOCK.UPDATE});if(debt.status==='cancelled')throw ApiError.badRequest('Долг уже отменён');await M.CashAllocation.destroy({where:{documentType:'balance',documentId:id},transaction:t});await debt.update({status:'cancelled',cancelReason:text(b.reason,'причину отмены')},{transaction:t});await applyForParty(debt.partyKey,t);return debt;});}
-module.exports={cancelOpening,opening,oldest,lockOrderParty,applyAdvance,editSupplier,extras,availableForOrder,visible,payment,allocate,reverse,payReceipt,supplier,prices,price,quote,quotePack,terms,ensureSuppliers,readData,summarize,documentPaid,orderCredits};
+module.exports={syncSupplierStatuses,cancelOpening,opening,oldest,lockOrderParty,applyAdvance,editSupplier,extras,availableForOrder,visible,payment,allocate,reverse,payReceipt,supplier,prices,price,quote,quotePack,terms,ensureSuppliers,readData,summarize,documentPaid,orderCredits};

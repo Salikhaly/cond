@@ -1,10 +1,11 @@
 const {day}=require('./overviewMetrics');
 const round=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 function reconciliation({party,supplier=false,entries=[],returns=[],from='',to=''}){
- const all=[],sign=supplier?-1:1,labels={cash:'Наличные',kaspi:'Карта / Kaspi',bank:'Банк'};
+ const all=[],sign=supplier?-1:1,labels={cash:'Наличные',kaspi:'Kaspi',bank:'Другой'};
  for(const doc of party.documents||[]){
   const date=day(doc.shippedAt||doc.date||doc.deliveryDate||doc.createdAt);
-  all.push({date,document:doc.document||(doc.isOpening?'Ранее внесённый долг':'Накладная № '+String(doc.id).slice(0,8).toUpperCase()),debit:supplier?0:Number(doc.total),credit:supplier?Number(doc.total):0});
+  all.push({date,document:doc.document||(doc.isOpening?'Ранее внесённый долг':'Накладная № '+String(doc.id).slice(0,8).toUpperCase()),debit:supplier?0:Number(doc.total),credit:supplier?Number(doc.originalTotal??doc.total):0});
+  if(supplier)for(const c of doc.corrections||[])all.push({date:day(c.date),document:'Корректировка № '+c.id.slice(0,8).toUpperCase()+' · '+c.reason,debit:Number(c.totalDelta)<0?-Number(c.totalDelta):0,credit:Math.max(0,Number(c.totalDelta))});
   // Old fully/partly paid receipts have no separate payment entry. Their immutable basePaid is included once.
   if(supplier&&Number(doc.basePaid)>0)all.push({date,document:'Оплата при приходе · '+(doc.document||String(doc.id).slice(0,8)),debit:Number(doc.basePaid),credit:0});
  }

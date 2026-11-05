@@ -28,7 +28,7 @@ export default function ReceiptAnalyticsScreen({ data }) {
             setTo(range.to);
         }
     };
-    const analytics = receiptAnalytics(data.receiptDocuments, data.receipts, materials, { from, to, materialId });
+    const analytics = receiptAnalytics(data.receiptDocuments, data.receipts, materials, { from, to, materialId, corrections:data.receiptCorrections });
     const unit = analytics.material?.unit || 'шт';
     const unitPriceLabel = `₸/${unit}`;
     const quantityLabel = unit === 'шт' ? 'Штук' : `Количество, ${unit}`;

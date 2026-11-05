@@ -11,8 +11,8 @@ const idempotent = require('../services/idempotency');
 const wrap = fn => async (req, res, next) => {
     try {
         if(req.params.id&&!/^(?:[1-9]\d{0,9}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(req.params.id))throw ApiError.badRequest('Некорректный номер записи');
-        const mutation = req.user && !['GET','HEAD'].includes(req.method) && !['/preview','/sync/send'].includes(req.path);
-        if (mutation && req.path==='/client-bonuses' && !req.headers['x-operation-id']) throw ApiError.badRequest('Обновите страницу и подтвердите выдачу бонуса');
+        const mutation = req.user && !['GET','HEAD'].includes(req.method) && !['/preview','/sync/send'].includes(req.path)&&!req.path.endsWith('/corrections/preview');
+        if (mutation && (req.path==='/client-bonuses'||/^\/receipts\/[^/]+\/corrections$/.test(req.path)) && !req.headers['x-operation-id']) throw ApiError.badRequest('Не удалось сохранить номер операции. Обновите форму и повторите');
         if (mutation) req.headers['x-operation-id'] ||= require('crypto').randomUUID();
         const action = async () => {
             const trail=require('../services/auditTrail'),before=mutation?await trail.snapshot(req):null;
@@ -143,6 +143,10 @@ router.patch('/customers/:id',wrap(req=>trade.editCustomer(req.user,req.params.i
 router.patch('/products/:id/display',wrap(async req=>{const c=await trade.display(req.user,req.params.id,req.body);return {productId:c.productId,photoVersion:c.photoVersion,hasPhoto:Boolean(c.photo),description:c.description,catalogGroup:c.catalogGroup,catalogVisible:c.catalogVisible,sortOrder:c.sortOrder};}));
 router.get('/products/:id/photo',async(req,res,next)=>{try{const media=await require('../services/productDisplayService').media(req.params.id,req.query.size);res.type(media.type).send(media.bytes);}catch(e){next(e);}});
 router.post('/materials', wrap(req => service.material(req.user, req.body)));
+router.post('/packaging/boxes',wrap(req=>require('../services/boxRuleService').save(req.user,null,req.body)));
+router.patch('/packaging/boxes/:id',wrap(req=>require('../services/boxRuleService').save(req.user,req.params.id,req.body)));
+router.post('/receipts/:id/corrections/preview',wrap(req=>require('../services/receiptCorrectionService').preview(req.user,req.params.id,req.body)));
+router.post('/receipts/:id/corrections',wrap(req=>require('../services/receiptCorrectionService').post(req.user,req.params.id,req.body)));
 router.post('/receipts', wrap(req => service.receipt(req.user, req.body)));
 router.post('/receipt-drafts',wrap(req=>require('../services/receiptDraftService').create(req.user,req.body)));
 router.patch('/receipt-drafts/:id',wrap(req=>require('../services/receiptDraftService').update(req.user,req.params.id,req.body)));

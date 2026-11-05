@@ -4,9 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(process.env.WEB_BUILD_DIR || path.join(__dirname, '../build'));
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
-http.createServer((req, res) => {
+// Local test databases use separate session cookies on the same hostname.
+// Browsers send cookies from every port; only forward this database's session.
+const sessionCookie = process.env.COND_SESSION_COOKIE;
+const server = http.createServer({maxHeaderSize:64 * 1024}, (req, res) => {
     if (/^\/api(?:\/|\?|$)/.test(req.url)) {
-        const upstream = http.request({ hostname: '127.0.0.1', port: process.env.API_PORT || 3000, path: req.url, method: req.method, headers: { ...req.headers, host: '127.0.0.1:3000', 'x-forwarded-host':req.headers.host } }, reply => {
+        const headers = { ...req.headers, host: '127.0.0.1:3000', 'x-forwarded-host':req.headers.host };
+        if(sessionCookie && headers.cookie) headers.cookie = headers.cookie.split(';').map(value=>value.trim()).filter(value=>value.startsWith(sessionCookie+'=')).join('; ');
+        const upstream = http.request({ hostname: '127.0.0.1', port: process.env.API_PORT || 3000, path: req.url, method: req.method, headers }, reply => {
             res.writeHead(reply.statusCode, reply.headers); reply.pipe(res);
         });
         upstream.on('error', () => { if (!res.headersSent) res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ message: 'Нет связи с локальным сервером. Повторите позже.' })); });
@@ -25,4 +30,5 @@ http.createServer((req, res) => {
     stream.on('error', () => { if (!res.headersSent) res.writeHead(500); res.end(); });
     res.writeHead(200, { 'Content-Type': mime[path.extname(filename)] || 'application/octet-stream', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
     if (req.method === 'HEAD') { stream.destroy(); res.end(); } else stream.pipe(res);
-}).listen(Number(process.env.WEB_PORT || 9000), process.env.WEB_HOST || '127.0.0.1', () => console.log('COND web ready on port ' + (process.env.WEB_PORT || 9000)));
+});
+server.listen(Number(process.env.WEB_PORT || 9000), process.env.WEB_HOST || '127.0.0.1', () => console.log('COND web ready on port ' + (process.env.WEB_PORT || 9000)));

@@ -1,3 +1,4 @@
+const {receiptCurrent}=require('./receiptCurrent');
 function day(value) {
     if (!value) return '';
     if (/^\d{4}-\d{2}-\d{2}/.test(String(value))) return String(value).slice(0, 10);
@@ -38,7 +39,8 @@ function receiptAnalytics(documents, receipts, materials, options = {}) {
     const material = (materials || []).find(m => String(m.id) === materialId) || null;
     const rows = [];
     const seen = new Set();
-    for (const doc of documents || []) {
+    for (const original of documents || []) {
+        const doc=receiptCurrent(original,options.corrections);
         const date = day(doc.date);
         if (!date || (from && date < from) || (to && date > to)) continue;
         seen.add([doc.supplier, date, doc.document].join('|'));
