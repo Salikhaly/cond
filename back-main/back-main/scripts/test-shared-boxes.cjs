@@ -19,5 +19,17 @@ require('dotenv').config();process.env.TELEGRAM_ENABLED='false';const assert=req
  const legacyBox=await M.Material.create({name:'Старая коробка без веса',kind:'box',unit:'шт',quantity:0,unitCost:0});
  const legacyRule=await rules.save(admin,legacyBox.id,{capacityKg:3.5,filmQtyM:0,name:'Коробка 3,5 кг'});check(near((await M.Material.findByPk(legacyBox.id)).capacityKg,3.5)&&(await M.Material.findByPk(legacyBox.id)).name==='Коробка 3,5 кг','Old box without capacity can be completed and renamed once');
  await assert.rejects(()=>rules.save(admin,legacyBox.id,{capacityKg:4,filmQtyM:0,expectedVersion:legacyRule.version}));check(true,'Existing box capacity cannot change behind historical documents');
+ const secondPack=(await ops.catalog(admin)).find(p=>p.id===second.id).packs.find(p=>p.capacityKg===1);
+ const secondOutput=await ops.production(worker,{productId:second.id,packId:secondPack.id,boxes:10,date});await ops.postProduction(admin,secondOutput.id);
+ const legacyOrder=await ops.order(admin,{company:'Тест · резерв кг',deliveryDate:date,lines:[{productId:second.id,kg:9}]});await ops.orderStatus(admin,legacyOrder.id,{status:'approved',prices:[2000]});
+ const nextOrder=await ops.order(admin,{company:'Тест · коробки после резерва',deliveryDate:date,lines:[{productId:second.id,packId:secondPack.id,boxes:2}]});
+ const {orderReadiness}=require('../../../front-main/front-main/src/operations/orderReadiness'),stockCatalog=await ops.catalog(admin),availability=stockCatalog.find(p=>p.id===second.id);
+ check(availability.availableKg===1&&availability.packs.find(p=>p.id===secondPack.id).availableBoxes===10,'Legacy kilogram reserve reduces shared weight even when boxes have no individual reserve');
+ check(orderReadiness(nextOrder.toJSON(),stockCatalog).ready===false,'Readiness preview blocks boxes whose kilograms are reserved elsewhere');
+ await assert.rejects(()=>ops.orderStatus(admin,nextOrder.id,{status:'approved',prices:[2000]}));check(true,'Server rejects the same shortage shown by the preview');
+ await ops.orderStatus(admin,legacyOrder.id,{status:'cancelled'});
+ check(orderReadiness(nextOrder.toJSON(),await ops.catalog(admin)).ready===true,'Releasing the earlier reserve makes the boxed order ready');
+ await ops.orderStatus(admin,nextOrder.id,{status:'approved',prices:[2000]});await ops.orderStatus(admin,nextOrder.id,{status:'shipped'});
+ check(near((await M.Stock.findByPk(second.id)).kg,8)&&near((await M.PackStock.findByPk(secondPack.id)).boxes,8),'Ready boxed order ships exactly two boxes and two kilograms');
  const recon=await require('../src/services/reconciliationService')(admin);check(recon.ok,'Shared packaging keeps stock, legacy quantities, wages and costs reconciled: '+recon.issues.join('; '));console.log(n+' shared box checks passed');
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(db)await db.close();if(created)await pg.query('DROP DATABASE "'+database+'" WITH (FORCE)');await pg.end();});

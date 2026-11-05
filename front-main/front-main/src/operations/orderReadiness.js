@@ -20,6 +20,28 @@ function orderReadiness(order,products=[]){
   const shortage=Math.max(0,amount-Number(available));
   if(shortage>0)missing.push({...line,capacityKg:pack?.capacityKg,missing:shortage});
  }
+ // Different pack sizes and legacy kilogram lines share the same total stock.
+ // Per-pack checks alone can reuse kilograms already reserved by a legacy order.
+ const totals=new Map();
+ for(const line of demands.values()){
+  const product=products.find(p=>String(p.id)===String(line.productId));
+  const pack=line.packId?product?.packs?.find(p=>String(p.id)===String(line.packId)):null;
+  const kg=line.packId?Number(line.boxes)*Number(pack?.capacityKg):Number(line.kg);
+  const key=String(line.productId),total=totals.get(key)||{product,line,kg:0};
+  if(Number.isFinite(kg))total.kg+=kg;
+  totals.set(key,total);
+ }
+ for(const {product,line,kg} of totals.values()){
+  const free=product?.availableKg;
+  if(free==null||!Number.isFinite(Number(free))){
+   unknown=true;
+   if(!missing.some(m=>String(m.productId)===String(line.productId)&&m.unknown))missing.push({...line,packId:null,unknown:true,missing:null});
+   continue;
+  }
+  const alreadyMissing=missing.filter(m=>String(m.productId)===String(line.productId)).reduce((sum,m)=>sum+(m.unknown?0:Number(m.missing)*(m.packId?Number(m.capacityKg):1)),0);
+  const extra=Math.round(Math.max(0,kg-Number(free)-alreadyMissing)*10000)/10000;
+  if(extra>0){const legacy=missing.find(m=>String(m.productId)===String(line.productId)&&!m.packId&&!m.unknown);if(legacy){legacy.missing=Math.round((legacy.missing+extra)*10000)/10000;legacy.sharedStock=true;}else missing.push({...line,name:product?.name||line.name,packId:null,capacityKg:null,missing:extra,sharedStock:true});}
+ }
  return {ready:!unknown&&!missing.length&&demands.size>0,unknown,missing};
 }
 module.exports={orderReadiness};
