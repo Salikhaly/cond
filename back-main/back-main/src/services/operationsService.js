@@ -511,6 +511,8 @@ module.exports = {
                     lines.push({productId,packId:pack.id,boxes,capacityKg:Number(pack.capacityKg),kg:round(boxes*Number(pack.capacityKg)),name:product.name+' · '+capacityText+' кг',boxName:capacityText+' кг',price:price==null?null:money(price)});
                 } else {
                     const kg=num(raw.kg,'количество');
+                    const variant=await M.PackagingVariant.findByPk(product.id,{transaction:t});
+                    if(variant)require('./packagingService').quantity(variant,{kg});
                     const price=target?await require('./tradeFinanceService').quote(target.customer.id,target.outlet.id,product.id,date(b.deliveryDate),t):(await M.SellingPrice.findByPk(product.id,{transaction:t}))?.price??null;
                     lines.push({productId,kg,name:product.name,price:price==null?null:Number(price)});
                 }
