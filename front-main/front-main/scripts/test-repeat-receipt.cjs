@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');
+const {repeatReceipt}=require('../src/operations/repeatReceipt');
+const doc={id:'old',supplier:'Поставщик',document:'OLD-1',date:'2025-02-01',paid:true,initialPayment:{amount:1000},additionalAmount:500,serverDraftId:'old',lines:[{materialId:'flour',quantity:10,unitCost:110,purchaseUnitCost:100},{materialId:'box',purchasePack:{count:2,size:20,pricePerUnit:0,unit:'коробка'}}]};
+const copy=JSON.stringify(doc),r=repeatReceipt(doc,[{id:'flour'}],'2026-11-05');
+assert.equal(r.date,'2026-11-05');assert.equal(r.document,'');assert.equal(r.paid,false);assert.equal(r.id,undefined);assert.equal(r.initialPayment,undefined);assert.equal(r.serverDraftId,undefined);assert.equal(r.additionalAmount,undefined);
+assert.equal(r.lines[0].unitCost,100);assert.equal(r.lines[0].quantity,10);assert.equal(r.lines.length,2);assert.equal(r.lines[1].materialId,'box');assert.equal(r.lines[1].packUnitPrice,'0');assert.equal(r.lines[1].packCount,2);
+assert.equal(JSON.stringify(doc),copy);
+const legacy=repeatReceipt({supplier:'A',lines:[{materialId:'x',quantity:null,unitCost:null},{materialId:'p',purchasePack:{count:1,size:10,price:500}}]},[],'2026-11-05');
+assert.equal(legacy.lines[0].quantity,'');assert.equal(legacy.lines[0].unitCost,'');assert.equal(legacy.lines[1].packUnitPrice,'50');
+console.log('17 repeat receipt assertions passed');

@@ -3,6 +3,8 @@ import { api, fmt, moneyFmt, today } from './api';
 import { Field, Select, Badge, Empty, Table } from './Fields';
 import useDraft, { DraftNote } from './useDraft';
 import WageRequests from './WageRequests';
+import ProductionPlan from './ProductionPlan';
+import {businessPlan} from './businessPlan';
 
 const packLabel = pack => `${fmt(pack.capacityKg)} кг`;
 const boxWord = value => {
@@ -22,6 +24,7 @@ export default function Production({ data, user, run, busy, initialAction, onNav
     const previewRef = useRef(null);
     const [cancelId, setCancelId] = useState('');
     const [documentId, setDocumentId] = useState('');
+    const [dateFilter,setDateFilter]=useState('');
     const [form, setForm, stored] = useDraft('production-boxes', { productId: '', packId: '', boxes: '', workerId: admin ? '' : user.id, date: today(), reason: '' });
     const [draftTarget, setDraftTarget] = useState(null);
     const [previewLoading, setPreviewLoading] = useState(false);
@@ -46,6 +49,8 @@ export default function Production({ data, user, run, busy, initialAction, onNav
 
     useEffect(() => { if (preview) previewRef.current?.scrollIntoView({ block: 'start' }); }, [preview]);
     useEffect(() => {
+        if(initialAction?.kind==='day-overview'){setDateFilter(initialAction.date);setStatus('all');setAdding(false);setTasksOpen(false);setDocumentId('');}
+        else setDateFilter('');
         if(initialAction?.kind==='production-tasks'){setTasksOpen(true);setAdding(false);}
         if (initialAction?.kind === 'historical-production') { setStatus('posted'); setAdding(false); setDocumentId(''); }
         if (initialAction === 'add' || initialAction?.kind === 'add') { setAdding(true); setDocumentId(''); setPreview(null); setPreviewFor(null); }
@@ -57,10 +62,10 @@ export default function Production({ data, user, run, busy, initialAction, onNav
         if (initialAction?.kind === 'production-document') { setDocumentId(initialAction.id); setStatus('all'); setAdding(false); }
         if (initialAction?.kind === 'record-production') {
             setAdding(true); setStatus('draft');
-            if (form.boxes && Number(form.productId) !== Number(initialAction.productId)) setDraftTarget(initialAction);
+            if (form.boxes && (Number(form.productId) !== Number(initialAction.productId)||(initialAction.packId&&String(form.packId)!==String(initialAction.packId)))) setDraftTarget(initialAction);
             else if (!form.boxes) {
                 const product = data.products.find(p => Number(p.id) === Number(initialAction.productId));
-                setForm(f => ({ ...f, productId: String(initialAction.productId), packId: product?.packs?.[0]?.id || '', boxes: '', date: today() }));
+                setForm(f => ({ ...f, productId: String(initialAction.productId), packId: product?.packs?.find(p=>String(p.id)===String(initialAction.packId))?.id || product?.packs?.[0]?.id || '', boxes: '', date: today() }));
             }
         }
         if (initialAction?.kind !== 'check-production') return;
@@ -70,7 +75,7 @@ export default function Production({ data, user, run, busy, initialAction, onNav
         return () => { current = false; };
     }, [initialAction]);
 
-    const rows = data.productions.filter(p => (!documentId || p.id === documentId) && (status === 'all' || p.status === status));
+    const rows = data.productions.filter(p => (!dateFilter||p.date===dateFilter) && (!documentId || p.id === documentId) && (status === 'all' || p.status === status));
     const productName = id => [...data.products, ...(data.archivedProducts || [])].find(p => p.id === id)?.name || `Товар №${id}`;
     const workerName = id => data.workers.find(w => w.id === id)?.name || user.name;
     const packOf = p => p.packId ? [...data.products, ...(data.archivedProducts || [])].flatMap(x => x.packs || []).find(x => String(x.id) === String(p.packId)) : null;
@@ -101,13 +106,15 @@ export default function Production({ data, user, run, busy, initialAction, onNav
         } catch (e) { setIntentError(e.message); } finally { setPreviewLoading(false); }
     };
 
+    if(admin&&tasksOpen)return <><button className="ghost" onClick={()=>setTasksOpen(false)}>← К выпускам</button><ProductionPlan plan={businessPlan(data,today())} setTab={onNavigate}/>{!businessPlan(data,today()).rows.length&&<Empty>Нет заявок на производство.</Empty>}</>;
     return <>
-        {!admin&&data.canViewProductionOrders&&<section className="op-card"><button type="button" className="secondary" aria-expanded={tasksOpen} onClick={()=>setTasksOpen(v=>!v)}>Что готовить · {(data.productionTasks||[]).filter(t=>t.toMake>0).length}</button>{tasksOpen&&<><h2>План по заявкам</h2>{!(data.productionTasks||[]).length&&<Empty>Нет заявок на производство</Empty>}{(data.productionTasks||[]).map(task=>{const product=data.products.find(p=>p.id===task.productId),pack=product?.packs?.find(p=>p.id===task.packId);return <article className="op-review-panel" key={task.key}><h3>{product?.name||'Товар'}{pack?' · '+fmt(pack.capacityKg)+' кг':''}</h3><p>{task.pendingOrders>0?'Есть заявки на согласовании · ':'Согласовано · '}К {task.deliveryDate} · Нужно {fmt(task.packId?task.boxes:task.kg)} {task.unit} · На складе {fmt(task.inStock)}</p><strong>{task.toMake>0?'Осталось изготовить '+fmt(task.toMake)+' '+task.unit:'Есть на складе'}</strong>{task.packId&&task.toMake>0&&<button type="button" disabled={busy} onClick={()=>{if(form.boxes&&(Number(form.productId)!==task.productId||form.packId!==task.packId)){setDraftTarget({...task,date:today()});return;}setForm(f=>({...f,productId:String(task.productId),packId:task.packId,boxes:String(task.toMake),date:today()}));setAdding(true);setTasksOpen(false);}}>Записать выпуск</button>}</article>;})}<p className="op-muted">Задания общие для цеха. Записывайте только свой фактический выпуск. Склад изменится после проверки администратором.</p></>}</section>}
+        {!admin&&data.canViewProductionOrders&&<section className="op-card"><button type="button" className="secondary" aria-expanded={tasksOpen} onClick={()=>setTasksOpen(v=>!v)}>Что готовить · {(data.productionTasks||[]).filter(t=>t.toMake>0).length}</button>{tasksOpen&&<><h2>План по заявкам</h2>{!(data.productionTasks||[]).length&&<Empty>Нет заявок на производство</Empty>}{(data.productionTasks||[]).map(task=>{const product=data.products.find(p=>p.id===task.productId),pack=product?.packs?.find(p=>p.id===task.packId);return <article className="op-review-panel" key={task.key}><h3>{product?.name||'Товар'}{pack?' · '+fmt(pack.capacityKg)+' кг':''}</h3><p>{task.pendingOrders>0?'Есть заявки на согласовании · ':'Согласовано · '}К {task.deliveryDate} · Нужно {fmt(task.packId?task.boxes:task.kg)} {task.unit} · На складе {fmt(task.inStock)}</p><strong>{task.toMake>0?'Осталось изготовить '+fmt(task.toMake)+' '+task.unit:'Есть на складе'}</strong>{task.packId&&task.toMake>0&&<button type="button" disabled={busy} onClick={()=>{if(form.boxes&&(Number(form.productId)!==task.productId||form.packId!==task.packId)){setDraftTarget({...task,date:today()});return;}setForm(f=>({...f,productId:String(task.productId),packId:task.packId,boxes:'',date:today()}));setAdding(true);setTasksOpen(false);}}>Записать выпуск</button>}</article>;})}<p className="op-muted">Задания общие для цеха. Записывайте только свой фактический выпуск. Склад изменится после проверки администратором.</p></>}</section>}
+        {dateFilter&&<div className="op-plan-context">Акты за {dateFilter}<button className="ghost" onClick={()=>setDateFilter('')}>Все даты</button></div>}
         {documentId && <div className="op-plan-context">Акт выпуска · № {documentId.slice(0, 8).toUpperCase()}<button className="ghost" onClick={() => setDocumentId('')}>Показать все акты</button></div>}
         {previewLoading && <p className="op-plan-context" role="status">Проверяем расход и остатки…</p>}
         {intentError && <p className="op-missing" role="alert">{intentError}</p>}
         {draftTarget && <div className="op-missing">Есть незаписанный выпуск другого товара. Сохраните его или откройте выбранный товар.<div className="op-actions"><button className="secondary" onClick={() => setDraftTarget(null)}>Продолжить черновик</button><button onClick={() => { setForm(f => ({ ...f, productId: String(draftTarget.productId || ''), packId: draftTarget.packId || '', boxes: '', date: draftTarget.date || today(), workerId: draftTarget.workerId || f.workerId })); setDraftTarget(null); }}>Открыть выбранный товар</button></div></div>}
-        {admin && <section className="op-card"><div className="op-section-heading"><h2>Производство коробками</h2><button onClick={() => setAdding(v => !v)}>{adding ? 'Закрыть форму' : '+ Записать выпуск'}</button></div><nav className="op-report-tabs op-order-tabs" aria-label="Производство">{[['draft', 'На проверке'], ['posted', 'Подтверждено'], ['all', 'Все записи']].map(([id, label]) => <button key={id} className={status === id ? 'active' : ''} aria-pressed={status === id} onClick={() => setStatus(id)}>{label}</button>)}</nav></section>}
+        {admin && <section className="op-card"><div className="op-section-heading"><h2>Производство</h2><button className="secondary" onClick={()=>setTasksOpen(true)}>План по заявкам</button><button onClick={() => setAdding(v => !v)}>{adding ? 'Закрыть форму' : '+ Записать выпуск'}</button></div><nav className="op-report-tabs op-order-tabs" aria-label="Производство">{[['draft', 'На проверке'], ['posted', 'Подтверждено'], ['all', 'Все записи']].map(([id, label]) => <button key={id} className={status === id ? 'active' : ''} aria-pressed={status === id} onClick={() => setStatus(id)}>{label}</button>)}</nav></section>}
         {adding && <section className="op-card">
             <h2>{admin ? 'Внести выработку сотрудника' : 'Сколько коробок вы изготовили?'}</h2>
             <p className="op-muted">Выберите товар, тип коробки и количество. Килограммы программа посчитает сама.</p>

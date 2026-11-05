@@ -6,7 +6,7 @@ function quickActions(role,section,allowed,canViewTasks){
   production:[['+ Выпуск','production',{kind:'add'}],['Заявки','orders'],['Товары','catalog']],
   payroll:[['Табель','payroll',{kind:'timesheet'}],['Выплаты','payroll',{kind:'payments'}]],
   finance:[['Аналитика','finance',{kind:'analytics'}],['Расход','expenses',{kind:'add'}]],
-  recipes:[['Товары','catalog'],['Выпуск','production',{kind:'add'}]],
+
  })[section]||[];
  return actions.filter(([,target])=>allowed.includes(target));
 }

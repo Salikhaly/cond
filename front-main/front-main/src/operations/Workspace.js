@@ -152,9 +152,9 @@ export default function Workspace() {
                     {allowedTab === 'packaging' && <Packaging data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'recipes' && <Recipes initialAction={intent} onNavigate={selectTab} data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab === 'production' && <Production onNavigate={selectTab} data={data} user={user} run={run} initialAction={intent} busy={busy || Boolean(data?.sync?.readOnly)} />}
-                    {allowedTab === 'orders' && <Orders onReturn={id=>selectTab('returns',{kind:'return',orderId:id})} initialAction={intent} data={data} user={user} run={run} busy={busy || Boolean(data?.sync?.readOnly)} initialOutlet={orderOutlet} onShops={()=>selectTab('shops')} />}
+                    {allowedTab === 'orders' && <Orders onNavigate={selectTab} onReturn={id=>selectTab('returns',{kind:'return',orderId:id})} initialAction={intent} data={data} user={user} run={run} busy={busy || Boolean(data?.sync?.readOnly)} initialOutlet={orderOutlet} onShops={()=>selectTab('shops')} />}
                     {allowedTab==='shops'&&<Customers initialAction={intent} data={data} user={user} run={run} busy={busy || Boolean(data?.sync?.readOnly)} onOrder={id=>{setOrderOutlet(id);selectTab('orders')}}/>}
-                    {allowedTab==='catalog'&&<ProductCatalog onProduce={id=>selectTab('production',{kind:'record-production',productId:id})} initialAction={intent} data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)}/>}
+                    {allowedTab==='catalog'&&<ProductCatalog onNavigate={selectTab} onProduce={id=>selectTab('production',{kind:'record-production',productId:id})} initialAction={intent} data={data} run={run} busy={busy || Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab==='returns'&&<Returns initialAction={intent} data={data} user={user} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}
                     {allowedTab === 'payroll' && <Payroll initialAction={intent} onNavigate={selectTab} data={data} user={user} run={run} busy={busy || Boolean(data?.sync?.readOnly)} />}
                     {allowedTab==='suppliers'&&<Suppliers initialAction={intent} data={data} run={run} busy={busy||Boolean(data?.sync?.readOnly)}/>}

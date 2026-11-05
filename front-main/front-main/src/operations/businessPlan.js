@@ -3,18 +3,41 @@ function businessPlan(data,anchor){
  const products=data.products||[],recipes=data.recipes||[],materials=data.materials||[],productions=data.productions||[];
  const active=(data.orders||[]).filter(o=>['submitted','approved'].includes(o.status)&&!o._pending);
  const demands=new Map();
- for(const o of active)for(const l of o.lines||[]){const key=String(l.productId);const p=demands.get(key)||{id:key,name:products.find(p=>String(p.id)===key)?.name||l.name||'Товар',orderedKg:0,submittedKg:0,approvedKg:0};p.orderedKg=round(p.orderedKg+Number(l.kg));p[o.status==='approved'?'approvedKg':'submittedKg']=round(p[o.status==='approved'?'approvedKg':'submittedKg']+Number(l.kg));demands.set(key,p);}
+ for(const o of active)for(const l of o.lines||[]){
+  const key=String(l.productId),product=products.find(p=>String(p.id)===key);
+  const p=demands.get(key)||{id:key,name:product?.name||l.name||'Товар',orderedKg:0,submittedKg:0,approvedKg:0,legacyKg:0,packDemands:new Map()};
+  const pack=product?.packs?.find(x=>String(x.id)===String(l.packId));
+  const kg=Number(l.kg??(Number(l.boxes)*Number(pack?.capacityKg)))||0;
+  p.orderedKg=round(p.orderedKg+kg);p[o.status==='approved'?'approvedKg':'submittedKg']=round(p[o.status==='approved'?'approvedKg':'submittedKg']+kg);
+  if(l.packId){const id=String(l.packId),d=p.packDemands.get(id)||{packId:id,orderedBoxes:0,orderedKg:0};d.orderedBoxes+=Number(l.boxes)||0;d.orderedKg+=kg;p.packDemands.set(id,d);}else p.legacyKg+=kg;
+  demands.set(key,p);
+ }
  const materialNeeds=new Map();
  const rows=[...demands.values()].map(row=>{
   const p=products.find(p=>String(p.id)===row.id),stockKg=Number(p?.kg)||0;
-  const needKg=round(Math.max(0,row.orderedKg-stockKg));
   const drafts=productions.filter(p=>p.status==='draft'&&String(p.productId)===row.id&&!p._pending&&!p._posting);
+  // Physical stock includes reserved boxes: active demand includes approved orders too.
+  // Subtracting reserves again would count the same committed order twice.
+  const packs=[...row.packDemands.values()].map(d=>{
+   const pack=p?.packs?.find(x=>String(x.id)===d.packId),capacityKg=Number(pack?.capacityKg)||Number(d.orderedKg/d.orderedBoxes)||0;
+   const stockBoxes=Math.max(0,Number(pack?.boxes??(Number(pack?.availableBoxes||0)+Number(pack?.reservedBoxes||0)))||0);
+   const needBoxes=Math.max(0,d.orderedBoxes-stockBoxes);
+   const matching=drafts.filter(x=>String(x.packId)===d.packId);
+   const waitingBoxes=matching.reduce((sum,x)=>sum+(Number(x.boxes)||0),0);
+   return {...d,capacityKg,stockBoxes,needBoxes,waitingBoxes,afterCheckBoxes:Math.max(0,needBoxes-waitingBoxes),draftId:matching[0]?.id,unknown:!pack||!capacityKg};
+  });
+  const stockUsedByBoxes=packs.reduce((sum,x)=>sum+Math.min(x.stockBoxes,x.orderedBoxes)*x.capacityKg,0);
+  const legacyNeedKg=Math.max(0,row.legacyKg-Math.max(0,stockKg-stockUsedByBoxes));
+  const legacyWaitingKg=drafts.filter(x=>!x.packId).reduce((sum,x)=>sum+Number(x.kg||0),0);
+  const needKg=round(packs.reduce((sum,x)=>sum+x.needBoxes*x.capacityKg,0)+legacyNeedKg);
+  const afterCheckKg=round(packs.reduce((sum,x)=>sum+x.afterCheckBoxes*x.capacityKg,0)+Math.max(0,legacyNeedKg-legacyWaitingKg));
   const waitingKg=round(drafts.reduce((s,p)=>s+Number(p.kg),0));
   const recipe=recipes.find(r=>String(r.productId)===row.id&&r.active!==false);
   const noRecipe=needKg>0&&(!recipe||Number(recipe.outputKg)<=0);
   // Pending output is shown separately; it never becomes real inventory.
   if(needKg>0&&!noRecipe)for(const l of recipe.lines||[]){const amount=round(Number(l.quantity)*needKg/Number(recipe.outputKg));materialNeeds.set(l.materialId,round((materialNeeds.get(l.materialId)||0)+amount));}
-  return {...row,stockKg,needKg,waitingKg,afterCheckKg:round(Math.max(0,needKg-waitingKg)),draftId:drafts[0]?.id,noRecipe};
+  const {packDemands,...demand}=row;
+  return {...demand,packs,stockKg,needKg,waitingKg,afterCheckKg,legacyNeedKg:round(legacyNeedKg),unknown:packs.some(x=>x.unknown),draftId:drafts[0]?.id,noRecipe};
  }).sort((a,b)=>b.needKg-a.needKg||a.name.localeCompare(b.name,'ru'));
  const shortages=[...materialNeeds].map(([id,required])=>{const m=materials.find(m=>m.id===id),available=Number(m?.quantity)||0;return{id,name:m?.name||'Материал не найден',unit:m?.unit||'',required,available,missing:round(Math.max(0,required-available)),known:Boolean(m)}}).filter(m=>m.missing>0).sort((a,b)=>a.name.localeCompare(b.name,'ru'));
  const priority=(a,b)=>String(a.deliveryDate||'9999').localeCompare(String(b.deliveryDate||'9999'))||String(a.id).localeCompare(String(b.id));

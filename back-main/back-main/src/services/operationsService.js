@@ -32,13 +32,13 @@ async function catalog(user) {
     const packs=await M.ProductPack.findAll({where:{active:true},order:[['capacityKg','ASC']]});
     const packStocks=await M.PackStock.findAll();
     const packagingMaterials=await M.Material.findAll({where:{kind:['box','film']}});
-    const film=packagingMaterials.find(m=>m.kind==='film')||null;
+    const film=await M.Material.findOne({where:{kind:'film',active:true}});
     const packView = p => packs.filter(x=>x.productId===p.id).map(x=>{
         const box=packagingMaterials.find(m=>m.id===x.boxMaterialId),stock=packStocks.find(s=>s.packId===x.id);
         const costPerBox=round(Number(p.priceTotal||0)*Number(x.capacityKg)+Number(box?.unitCost||0)+Number(film?.unitCost||0)*Number(x.filmQtyM||0)+Number(x.laborPerBox||0)+Number(x.overheadPerBox||0));
         const fallback=sellingPrices.find(s=>s.productId===p.id)?.price;
         const salePrice=x.salePrice==null?(fallback==null?null:money(Number(fallback)*Number(x.capacityKg))):Number(x.salePrice);
-        return {id:x.id,capacityKg:Number(x.capacityKg),boxMaterialId:x.boxMaterialId,boxName:box?.name||('Коробка '+x.capacityKg+' кг'),filmQtyM:Number(x.filmQtyM||0),salePrice,costPerBox,availableBoxes:round(Number(stock?.boxes||0)-Number(stock?.reservedBoxes||0)),boxes:round(stock?.boxes||0),reservedBoxes:round(stock?.reservedBoxes||0),laborPerBox:Number(x.laborPerBox||0)};
+        return {id:x.id,capacityKg:Number(x.capacityKg),boxMaterialId:x.boxMaterialId,filmMaterialId:film?.id||null,boxName:box?.name||('Коробка '+x.capacityKg+' кг'),filmQtyM:Number(x.filmQtyM||0),salePrice,costPerBox,availableBoxes:round(Number(stock?.boxes||0)-Number(stock?.reservedBoxes||0)),boxes:round(stock?.boxes||0),reservedBoxes:round(stock?.reservedBoxes||0),laborPerBox:Number(x.laborPerBox||0),overheadPerBox:Number(x.overheadPerBox||0)};
     });
     const used=await M.Production.findAll({where:{status:{[Op.in]:['draft','posted']}},attributes:['productId'],group:['productId']});
     const personal=user.role==='employee'?await require('./workPolicyService').at(user.id,require('./businessDay').today()):null;
@@ -48,7 +48,7 @@ async function catalog(user) {
         if (user.role === 'employee') {
             const rate=personal?.pieceRates?.find(r=>r.productId===p.id),piece=!personal||['piece','monthly_piece'].includes(personal.mode),pack=variants.find(v=>v.productId===p.id);
             const perKg=rate?Number(rate.rate)/(rate.unit==='pack'?Number(packKg):1):profile?.individualRate!=null?Number(profile.individualRate):pack?Number(pack.laborPerPack)/Number(pack.kgPerPack):Number(p.priceForEmployee);
-            return {id:p.id,name:p.name,weight:p.weight,packKg,packs:packView(p).map(x=>({...x,costPerBox:undefined,salePrice:undefined,payPerBox:piece?(!rate&&Number(personal?.boxRate)>0?Number(personal.boxRate):rate||profile?.individualRate!=null?round(perKg*x.capacityKg):Number(x.laborPerBox)):null})),wageMode:personal?.mode||'piece',payRateForKg:piece&&(!Number(personal?.boxRate)||rate)?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
+            return {id:p.id,name:p.name,weight:p.weight,packKg,packs:packView(p).map(x=>({...x,costPerBox:undefined,overheadPerBox:undefined,salePrice:undefined,payPerBox:piece?(!rate&&Number(personal?.boxRate)>0?Number(personal.boxRate):rate||profile?.individualRate!=null?round(perKg*x.capacityKg):Number(x.laborPerBox)):null})),wageMode:personal?.mode||'piece',payRateForKg:piece&&(!Number(personal?.boxRate)||rate)?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
         }
         const s = stocks.find(s => s.productId === p.id);
         const display=displays.find(d=>d.productId===p.id);
