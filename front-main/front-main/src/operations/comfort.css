@@ -35,3 +35,5 @@
 .op-app{--op-green:#216854;--op-ink:#20372f;--op-soft:#edf4ee;--op-line:#e3eae5;--op-muted:#718078}
 
 .op-app .cond-payment-source{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;margin:12px 0;padding:12px;text-align:left;border-radius:12px;background:#fff;color:#246b58;border:1px solid #e1e9e6;box-shadow:none;font-size:14px}.cond-payment-source>span{min-width:0;overflow-wrap:anywhere}.cond-payment-source>b{white-space:nowrap;flex-shrink:0;font-size:14px}.op-app p.cond-payment-source{color:inherit}
+
+.cond-legacy-picks{padding:16px;border:1px solid #dfe8ed;border-radius:16px;background:#f5f8fc;margin:14px 0}.cond-legacy-picks h4{margin:0 0 10px}.cond-legacy-picks .op-field{margin-bottom:10px}

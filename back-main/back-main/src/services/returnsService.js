@@ -359,10 +359,12 @@ module.exports = {
           const price = Number(b.prices[i]);
           if (b.prices[i] === '' || b.prices[i] == null || !Number.isFinite(price) || price < 0 || price > 1e8 || Math.abs(price - money(price)) > 1e-8) fail('Некорректная цена товара на обмен');
           const stock = await M.Stock.findByPk(l.productId,{transaction:t,lock:t.LOCK.UPDATE});
+          const fulfilment=await require('./legacyShipmentService').consume(l,b.shipmentPacks?.[i]??[],stock,t);
           await require('./stockValueService').shipment(stock,replacementId,Number(l.kg),t);
           const p = await changeStock(l.productId, -l.kg, t);
           lines.push({
             ...l,
+            ...fulfilment,
             name: p.name,
             price
           });

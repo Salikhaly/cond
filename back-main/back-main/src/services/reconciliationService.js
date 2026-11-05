@@ -19,6 +19,9 @@ module.exports = async user => {
             if(e.kind==='shipment'){const order=orders.find(o=>o.id===e.orderId),lines=order?.lines.filter(l=>l.productId===e.productId)||[];if(!lines.length||order.status!=='shipped'||!close(lines.reduce((s,l)=>s+Number(l.kg),0),e.kg))issues.push('Стоимость не совпадает с отгрузкой '+e.id);}
             if(e.kind==='production'){const p=productions.find(p=>'production:'+p.id===e.id);if(!p||p.status!=='posted'||!close(p.totalCost,e.value)||!close(p.kg,e.kg))issues.push('Стоимость не совпадает с выпуском '+e.id);}
         }
+        const packDefinitions=await read(M.ProductPack),packStocks=await read(M.PackStock);
+        for(const stock of stocks){const packs=packDefinitions.filter(p=>p.productId===stock.productId),boxed=packs.reduce((sum,p)=>sum+Number(packStocks.find(s=>s.packId===p.id)?.boxes||0)*Number(p.capacityKg),0);if(boxed>Number(stock.kg)+.00011)issues.push('Товар '+(products.find(p=>p.id===stock.productId)?.name||stock.productId)+': вес коробок '+boxed+' кг больше общего остатка '+Number(stock.kg)+' кг — пересчитайте коробки и вес');}
+        for(const pack of packStocks)if(Number(pack.boxes)<0||Number(pack.reservedBoxes)<0||Number(pack.reservedBoxes)>Number(pack.boxes)+.00011)issues.push('Коробки: проверьте остаток и резерв '+pack.packId);
         const receiptCorrections=await read(M.ReceiptCorrection);
         for (const m of materials) {
             const incoming = receipts.filter(r => r.materialId === m.id).reduce((s, r) => s + Number(r.quantity), 0);

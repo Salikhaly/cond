@@ -564,11 +564,12 @@ module.exports = {
                 await o.update({ lines, total: money(lines.reduce((s, l) => s + lineTotal(l), 0)) }, { transaction: t });
             }
             if (b.status==='shipped' || b.status==='cancelled'&&o.status==='approved') {
-                const valuedProducts = new Set();
-                for (const l of [...o.lines].sort((a, b) => a.productId - b.productId)) {
+                const valuedProducts = new Set(),shippedLines=o.lines.map(l=>({...l}));
+                for (const l of [...shippedLines].sort((a, b) => a.productId - b.productId)) {
                     const product = required(await Product.findByPk(l.productId, { transaction: t, lock: t.LOCK.UPDATE }), 'Товар');
                     const stock = required(await M.Stock.findByPk(l.productId, { transaction: t, lock: t.LOCK.UPDATE }), 'Остаток');
                     if (Number(stock.reservedKg) < l.kg || (b.status === 'shipped' && Number(stock.kg) < l.kg)) throw ApiError.badRequest('Остатки изменились. Проверьте склад');
+                    if(b.status==='shipped'&&l.packId)await require('./legacyShipmentService').assertShape(l.productId,stock,t);
                     await stock.decrement('reservedKg', { by: l.kg, transaction: t });
                     if (l.packId) {
                         const packStock=required(await M.PackStock.findOne({where:{packId:l.packId},transaction:t,lock:t.LOCK.UPDATE}),'Остаток коробок');
@@ -577,6 +578,10 @@ module.exports = {
                         if(b.status==='shipped')await packStock.decrement('boxes',{by:Number(l.boxes),transaction:t});
                     }
                     if (b.status === 'shipped') {
+                        if(!l.packId){
+                            const index=o.lines.findIndex(line=>line.productId===l.productId&&!line.packId);
+                            Object.assign(l,await require('./legacyShipmentService').consume(l,b.shipmentPacks?.[index]??[],stock,t));
+                        }
                         if (!valuedProducts.has(l.productId)) {
                             const totalKg = round(o.lines.filter(line=>line.productId===l.productId).reduce((sum,line)=>sum+Number(line.kg),0));
                             await require('./stockValueService').shipment(stock,o.id,totalKg,t);
@@ -591,6 +596,7 @@ module.exports = {
                         await M.LegacyLink.create({ id: `shipment:${o.id}:${l.productId}:${l.packId || 'kg'}`, data: { incomeId: income.id } }, { transaction: t });
                     }
                 }
+                if(b.status==='shipped')await o.update({lines:shippedLines},{transaction:t});
             }
             await o.update({status:b.status,...(b.status==='shipped'?{shippedAt:new Date()}:{})},{transaction:t});
             if(b.status==='shipped')await require('./tradeFinanceService').applyAdvance(o,t);

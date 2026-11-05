@@ -1,4 +1,5 @@
 import BackToReport from './BackToReport';
+import LegacyShipmentPicker,{shipmentStatus} from './LegacyShipmentPicker';
 import {boxWord} from './boxWord';
 import {priceForPack} from '../../../../back-main/back-main/src/domain/catalogPrice';
 import OrderProductCard from './OrderProductCard';
@@ -15,37 +16,42 @@ import { InvoiceBatch } from './PrintDocuments';
 
 const money = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const lineTotal = l => l.packId ? money(Number(l.boxes) * Number(l.price)) : money(Number(l.kg) * Number(l.price));
+const orderQuantity=order=>{const boxes=order.lines.reduce((s,l)=>s+Number(l.packId?l.boxes:0),0),kg=order.lines.filter(l=>!l.packId).reduce((s,l)=>s+Number(l.kg||0),0);return [boxes>0?fmt(boxes)+' '+boxWord(boxes):'',kg>0?fmt(kg)+' кг':''].filter(Boolean).join(' · ');};
 const lineQuantity = l => l.packId ? `${fmt(l.boxes)} ${boxWord(l.boxes)}` : `${fmt(l.kg)} кг`;
 
 function OrderCard({ order, admin, run, busy, onPrint, onReturn, onPlan, onOpen, full=false, products = [] }) {
     const [prices, setPrices] = useState(order.lines.map(l => l.price ?? ''));
     const [confirm, setConfirm] = useState(null);
+    const [shipmentPacks,setShipmentPacks]=useState({});
+    const shipmentReady=!admin||order.status!=='approved'||order.lines.every((line,i)=>line.packId||shipmentStatus(line,products.find(p=>p.id===line.productId),shipmentPacks[i]).complete);
     const displayPrices = order.lines.map((l, i) => {
         const value = admin && order.status === 'submitted' ? prices[i] : l.price;
         return value === '' || value == null ? null : Number(value);
     });
     const displayTotal = displayPrices.some(price => price === null) ? null : money(order.lines.reduce((sum, line, index) => sum + (line.packId ? Number(line.boxes) * displayPrices[index] : Number(line.kg) * displayPrices[index]), 0));
     const readiness=orderReadiness(order,products),missing=readiness.missing;
-    const submit = status => run(() => api('/orders/' + order.id, status === 'approved' ? { status, prices } : { status }, 'PATCH'), 'Изменения сохранены');
+    const submit = status => run(() => api('/orders/' + order.id, status === 'approved' ? { status, prices } : status==='shipped'?{status,shipmentPacks}:{ status }, 'PATCH'), 'Изменения сохранены');
     if(!full)return <button className="ux-order-summary" onClick={onOpen}>
-        <span><b>{order.destination?.outletName||order.company}</b><small>На {order.deliveryDate} · № {order.id.slice(0,8).toUpperCase()}</small><small>{order._pending?'Ждёт отправки':order.status==='approved'?'В резерве · можно отгрузить':order.status==='submitted'?(readiness.unknown?'Уточнить остаток':readiness.ready?'Есть на складе · согласовать':'Нужно изготовить'):order.status==='shipped'?'Отгружено':'Отменено'}</small></span>
-        <span><strong>{displayTotal===null?'Цена не указана':moneyFmt(displayTotal)+' ₸'}</strong><small>{fmt(order.lines.reduce((sum,l)=>sum+Number(l.boxes||0),0))} {boxWord(order.lines.reduce((sum,l)=>sum+Number(l.boxes||0),0))}</small></span>
+        <span><b>{order.destination?.outletName||order.company}</b><small>На {order.deliveryDate} · № {order.id.slice(0,8).toUpperCase()}</small><small>{order._pending?'Ждёт отправки':order.status==='approved'?(shipmentReady?'В резерве · можно отгрузить':'В резерве · выбрать коробки'):order.status==='submitted'?(readiness.unknown?'Уточнить остаток':readiness.ready?'Есть на складе · согласовать':'Нужно изготовить'):order.status==='shipped'?'Отгружено':'Отменено'}</small></span>
+        <span><strong>{displayTotal===null?'Цена не указана':moneyFmt(displayTotal)+' ₸'}</strong><small>{orderQuantity(order)}</small></span>
     </button>;
     return <article id={'op-order-' + order.id} className="op-order">
         <div className="op-section-heading"><div>{order._pending ? <span className="op-badge">На телефоне · ждёт отправки</span> : <Badge status={order.status} />}<h3>{order.destination?.outletName || order.company}</h3>{order.destination && <p className="op-muted">{order.destination.customerName} · {order.destination.address}</p>}<p className="op-muted">№ {order.id.slice(0, 8).toUpperCase()} · На {order.deliveryDate}</p></div><button className="secondary" disabled={order._pending} onClick={() => onPrint(order)}>{order.status === 'shipped' ? 'Накладная' : 'Печать заявки'}</button></div>
-        <details className="op-help suite-order-lines" open={admin && order.status === 'submitted'}><summary>Товары · {order.lines.length} поз. · {fmt(order.lines.reduce((sum, line) => sum + Number(line.boxes || 0), 0))} {boxWord(order.lines.reduce((sum, line) => sum + Number(line.boxes || 0), 0))}</summary><Table mobileCards headers={['Товар', 'Количество', 'Цена за коробку', 'Сумма']}>
-            {order.lines.map((line, i) => <tr key={line.packId || line.productId + '-' + i}><td>{line.name}</td><td>{lineQuantity(line)}</td><td>{admin && order.status === 'submitted' ? <NumericInput aria-label={`Цена за коробку: ${line.name}`} type="number" min="0" step="0.01" value={prices[i]} onChange={e => { const value = e.target.value; setPrices(p => p.map((x, j) => i === j ? value : x)); }} /> : line.price == null ? 'Согласуется' : `${fmt(line.price)} ₸`}</td><td>{displayPrices[i] === null ? '—' : moneyFmt(line.packId ? Number(line.boxes) * displayPrices[i] : Number(line.kg) * displayPrices[i]) + ' ₸'}</td></tr>)}
+        <details className="op-help suite-order-lines" open={admin && order.status === 'submitted'}><summary>Товары · {order.lines.length} поз. · {orderQuantity(order)}</summary><Table mobileCards headers={['Товар', 'Количество', 'Цена, ₸', 'Сумма']}>
+            {order.lines.map((line, i) => <tr key={line.packId || line.productId + '-' + i}><td>{line.name}</td><td>{lineQuantity(line)}</td><td>{admin && order.status === 'submitted' ? <NumericInput aria-label={`Цена за ${line.packId?'коробку':'кг'}: ${line.name}`} type="number" min="0" step="0.01" value={prices[i]} onChange={e => { const value = e.target.value; setPrices(p => p.map((x, j) => i === j ? value : x)); }} /> : line.price == null ? 'Согласуется' : `${fmt(line.price)} ₸`}</td><td>{displayPrices[i] === null ? '—' : moneyFmt(line.packId ? Number(line.boxes) * displayPrices[i] : Number(line.kg) * displayPrices[i]) + ' ₸'}</td></tr>)}
         </Table></details>
         <p className="op-order-total">{order.status === 'submitted' ? 'Предварительно: ' : 'Итого: '}{displayTotal === null ? 'Цена не указана' : moneyFmt(displayTotal) + ' ₸'}</p>
         {order.note && <p className="op-muted">Комментарий: {order.note}</p>}
         {admin && missing.length > 0 && <div className="op-missing"><b>{readiness.unknown?'Нужно уточнить остаток':'Нужно изготовить'}</b>{missing.map(line => <span key={line.packId || line.productId}>{line.name}: {line.unknown?'остаток недоступен':`ещё ${fmt(line.missing)} ${line.packId?boxWord(line.missing):'кг'}${line.capacityKg?' по '+fmt(line.capacityKg)+' кг':''}`}</span>)}{onPlan&&!readiness.unknown&&<button className="secondary" onClick={onPlan}>Что изготовить →</button>}</div>}
+        {admin&&order.status==='approved'&&order.lines.map((line,i)=>!line.packId&&<LegacyShipmentPicker key={line.productId} line={line} product={products.find(p=>p.id===line.productId)} value={shipmentPacks[i]||[]} onChange={value=>{setShipmentPacks(s=>({...s,[i]:value}));setConfirm(null);}}/>)}
+        {order.status==='shipped'&&order.lines.filter(l=>l.shipmentPacks?.length).map(l=><p className="op-muted" key={l.productId}>{l.name}: {l.shipmentPacks.map(p=>fmt(p.boxes)+' '+boxWord(p.boxes)+' по '+fmt(p.capacityKg)+' кг').join(' · ')}{Number(l.shipmentLooseKg)>0?' · без коробок '+fmt(l.shipmentLooseKg)+' кг':''}</p>)}
         <div className="op-actions">
             {order.status === 'shipped' && onReturn && <button className="secondary" onClick={() => onReturn(order.id)}>Возврат / Обмен</button>}
             {!order._pending && admin && order.status === 'submitted' && !missing.length && <button disabled={busy || missing.length > 0 || prices.some(p => p === '' || p == null || Number(p) < 0)} onClick={() => setConfirm('approved')}>Подтвердить заказ</button>}
-            {!order._pending && admin && order.status === 'approved' && <button disabled={busy} onClick={() => setConfirm('shipped')}>Подтвердить отгрузку</button>}
+            {!order._pending && admin && order.status === 'approved' && <button disabled={busy||!shipmentReady} onClick={() => setConfirm('shipped')}>Подтвердить отгрузку</button>}
             {!order._pending && ['submitted', 'approved'].includes(order.status) && <button className="ghost danger" disabled={busy} onClick={() => setConfirm('cancelled')}>Отменить заявку</button>}
         </div>
-        {confirm && <div className="op-order-confirm"><b>{confirm === 'approved' ? 'Согласовать цены и занять коробки в резерв?' : confirm === 'shipped' ? 'Коробки переданы магазину? Подтвердить списание?' : 'Отменить эту заявку?'}</b><p>{order.destination?.outletName || order.company} · {fmt(order.lines.reduce((n, line) => n + Number(line.boxes || 0), 0))} {boxWord(order.lines.reduce((n, line) => n + Number(line.boxes || 0), 0))}</p><div className="op-actions"><button disabled={busy} onClick={() => submit(confirm)}>Подтвердить</button><button className="secondary" onClick={() => setConfirm(null)}>Назад</button></div></div>}
+        {confirm && <div className="op-order-confirm"><b>{confirm === 'approved' ? 'Согласовать цены и занять коробки в резерв?' : confirm === 'shipped' ? 'Коробки переданы магазину? Подтвердить списание?' : 'Отменить эту заявку?'}</b><p>{order.destination?.outletName || order.company} · {orderQuantity(order)}</p><div className="op-actions"><button disabled={busy||confirm==='shipped'&&!shipmentReady} onClick={() => submit(confirm)}>Подтвердить</button><button className="secondary" onClick={() => setConfirm(null)}>Назад</button></div></div>}
     </article>;
 }
 
