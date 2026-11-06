@@ -580,7 +580,7 @@ module.exports = {
                     if (b.status === 'shipped') {
                         if(!l.packId){
                             const index=o.lines.findIndex(line=>line.productId===l.productId&&!line.packId);
-                            Object.assign(l,await require('./legacyShipmentService').consume(l,b.shipmentPacks?.[index]??[],stock,t));
+                            Object.assign(l,await require('./legacyShipmentService').consume(l,b.shipmentPacks?.[index]??[],stock,t,{unpack:b.shipmentUnpack?.[index]===true}));
                         }
                         if (!valuedProducts.has(l.productId)) {
                             const totalKg = round(o.lines.filter(line=>line.productId===l.productId).reduce((sum,line)=>sum+Number(line.kg),0));

@@ -22,15 +22,15 @@ const lineQuantity = l => l.packId ? `${fmt(l.boxes)} ${boxWord(l.boxes)}` : `${
 function OrderCard({ order, admin, run, busy, onPrint, onReturn, onPlan, onOpen, full=false, products = [] }) {
     const [prices, setPrices] = useState(order.lines.map(l => l.price ?? ''));
     const [confirm, setConfirm] = useState(null);
-    const [shipmentPacks,setShipmentPacks]=useState({});
-    const shipmentReady=!admin||order.status!=='approved'||order.lines.every((line,i)=>line.packId||shipmentStatus(line,products.find(p=>p.id===line.productId),shipmentPacks[i]).complete);
+    const [shipmentPacks,setShipmentPacks]=useState({}),[shipmentUnpack,setShipmentUnpack]=useState({});
+    const shipmentReady=!admin||order.status!=='approved'||order.lines.every((line,i)=>line.packId||shipmentStatus(line,products.find(p=>p.id===line.productId),shipmentPacks[i],shipmentUnpack[i]).complete);
     const displayPrices = order.lines.map((l, i) => {
         const value = admin && order.status === 'submitted' ? prices[i] : l.price;
         return value === '' || value == null ? null : Number(value);
     });
     const displayTotal = displayPrices.some(price => price === null) ? null : money(order.lines.reduce((sum, line, index) => sum + (line.packId ? Number(line.boxes) * displayPrices[index] : Number(line.kg) * displayPrices[index]), 0));
     const readiness=orderReadiness(order,products),missing=readiness.missing;
-    const submit = status => run(() => api('/orders/' + order.id, status === 'approved' ? { status, prices } : status==='shipped'?{status,shipmentPacks}:{ status }, 'PATCH'), 'Изменения сохранены');
+    const submit = status => run(() => api('/orders/' + order.id, status === 'approved' ? { status, prices } : status==='shipped'?{status,shipmentPacks,shipmentUnpack}:{ status }, 'PATCH'), 'Изменения сохранены');
     if(!full)return <button className="ux-order-summary" onClick={onOpen}>
         <span><b>{order.destination?.outletName||order.company}</b><small>На {order.deliveryDate} · № {order.id.slice(0,8).toUpperCase()}</small><small>{order._pending?'Ждёт отправки':order.status==='approved'?(shipmentReady?'В резерве · можно отгрузить':'В резерве · выбрать коробки'):order.status==='submitted'?(readiness.unknown?'Уточнить остаток':readiness.ready?'Есть на складе · согласовать':'Нужно изготовить'):order.status==='shipped'?'Отгружено':'Отменено'}</small></span>
         <span><strong>{displayTotal===null?'Цена не указана':moneyFmt(displayTotal)+' ₸'}</strong><small>{orderQuantity(order)}</small></span>
@@ -43,8 +43,8 @@ function OrderCard({ order, admin, run, busy, onPrint, onReturn, onPlan, onOpen,
         <p className="op-order-total">{order.status === 'submitted' ? 'Предварительно: ' : 'Итого: '}{displayTotal === null ? 'Цена не указана' : moneyFmt(displayTotal) + ' ₸'}</p>
         {order.note && <p className="op-muted">Комментарий: {order.note}</p>}
         {admin && missing.length > 0 && <div className="op-missing"><b>{readiness.unknown?'Нужно уточнить остаток':'Нужно изготовить'}</b>{missing.map(line => <span key={line.packId || line.productId}>{line.name}: {line.unknown?'остаток недоступен':`ещё ${fmt(line.missing)} ${line.packId?boxWord(line.missing):'кг'}${line.capacityKg?' по '+fmt(line.capacityKg)+' кг':''}`}</span>)}{onPlan&&!readiness.unknown&&<button className="secondary" onClick={onPlan}>Что изготовить →</button>}</div>}
-        {admin&&order.status==='approved'&&order.lines.map((line,i)=>!line.packId&&<LegacyShipmentPicker key={line.productId} line={line} product={products.find(p=>p.id===line.productId)} value={shipmentPacks[i]||[]} onChange={value=>{setShipmentPacks(s=>({...s,[i]:value}));setConfirm(null);}}/>)}
-        {order.status==='shipped'&&order.lines.filter(l=>l.shipmentPacks?.length).map(l=><p className="op-muted" key={l.productId}>{l.name}: {l.shipmentPacks.map(p=>fmt(p.boxes)+' '+boxWord(p.boxes)+' по '+fmt(p.capacityKg)+' кг').join(' · ')}{Number(l.shipmentLooseKg)>0?' · без коробок '+fmt(l.shipmentLooseKg)+' кг':''}</p>)}
+        {admin&&order.status==='approved'&&order.lines.map((line,i)=>!line.packId&&<LegacyShipmentPicker key={line.productId} line={line} product={products.find(p=>p.id===line.productId)} value={shipmentPacks[i]||[]} unpack={shipmentUnpack[i]===true} onUnpackChange={value=>{setShipmentUnpack(s=>({...s,[i]:value}));setConfirm(null);}} onChange={value=>{setShipmentPacks(s=>({...s,[i]:value}));setShipmentUnpack(s=>({...s,[i]:false}));setConfirm(null);}}/>)}
+        {order.status==='shipped'&&order.lines.filter(l=>l.shipmentPacks?.length).map(l=><p className="op-muted" key={l.productId}>{l.name}: {l.shipmentPacks.map(p=>fmt(p.boxes)+' '+boxWord(p.boxes)+' по '+fmt(p.capacityKg)+' кг').join(' · ')}{Number(l.shipmentLooseKg)>0?' · без коробок '+fmt(l.shipmentLooseKg)+' кг':''}{Number(l.shipmentOpenedKg)>0?' · остаток из открытой коробки '+fmt(l.shipmentOpenedKg)+' кг':''}</p>)}
         <div className="op-actions">
             {order.status === 'shipped' && onReturn && <button className="secondary" onClick={() => onReturn(order.id)}>Возврат / Обмен</button>}
             {!order._pending && admin && order.status === 'submitted' && !missing.length && <button disabled={busy || missing.length > 0 || prices.some(p => p === '' || p == null || Number(p) < 0)} onClick={() => setConfirm('approved')}>Подтвердить заказ</button>}

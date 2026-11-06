@@ -7,7 +7,7 @@ function physicalShape(product){
  return {boxedKg,looseKg:round(Math.max(0,kg-boxedKg))};
 }
 // A legacy kg line keeps its commercial unit. Fulfilment records actual boxes separately.
-function legacyShipmentPlan(line,product,picks=[]){
+function legacyShipmentPlan(line,product,picks=[],options={}){
  if(!Array.isArray(picks)||picks.length>100)throw Error('Проверьте выбранные коробки');
  const packs=product.packs||[],seen=new Set(),rows=[];
  for(const raw of picks){
@@ -21,8 +21,8 @@ function legacyShipmentPlan(line,product,picks=[]){
  const kg=Number(product.kg),required=Number(line.kg);
  if(!Number.isFinite(kg)||!Number.isFinite(required)||required<=0)throw Error('Обновите остаток товара перед отгрузкой');
  const selectedKg=round(rows.reduce((sum,p)=>sum+p.boxes*p.capacityKg,0));
- if(selectedKg>required+.00011)throw Error('Выбрано больше килограммов, чем в заявке');
+ const openedRemainderKg=round(Math.max(0,selectedKg-required)),requiresUnpack=openedRemainderKg>.00011&&options.unpack!==true;
  const requiredLooseKg=round(Math.max(0,required-selectedKg)),missingLooseKg=round(Math.max(0,requiredLooseKg-looseKg));
- return {picks:rows,looseKg,selectedKg,requiredLooseKg,missingLooseKg,complete:missingLooseKg<=.00011};
+ return {picks:rows,looseKg,selectedKg,requiredLooseKg,missingLooseKg,openedRemainderKg,requiresUnpack,complete:!requiresUnpack&&missingLooseKg<=.00011};
 }
 module.exports={legacyShipmentPlan,physicalShape};
