@@ -31,6 +31,6 @@ function fullCostMetrics(data,from,to,selected={}){
   const salePrice=r.packId?(pack?.salePrice==null||!packKg?null:Number(pack.salePrice)/packKg):numeric(raw?.salePrice);
   return {...r,name:raw?.name||'Товар',packKg:packKg||0,salePrice,base,recipeCost,packagingPerKg:r.packaging/r.kg,plannedOverheadPerKg:r.plannedOverhead/r.kg,fullCost,fullPerPack:fullCost==null||!packKg?null:fullCost*packKg};
  }).sort((a,b)=>a.name.localeCompare(b.name,'ru')||a.packKg-b.packKg);
- return {kg,groups,active,amount,allocatedPerKg,missing,unknown,ready:expenseReady&&rows.every(r=>r.complete),actual,rows,unknownCostRows:rows.filter(r=>!r.complete),personal:expenses.personal};
+ return {kg,groups,active,amount,allocatedPerKg,allocationReady:expenseReady,missing,unknown,ready:expenseReady&&rows.every(r=>r.complete),actual,rows,unknownCostRows:rows.filter(r=>!r.complete),personal:expenses.personal};
 }
 module.exports={fullCostMetrics,savedParts};
