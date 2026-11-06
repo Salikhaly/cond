@@ -70,7 +70,9 @@ router.post('/account-email-test',wrap(async req=>{
     await require('../services/authorityService').owner(req.user);
     if(!require('../services/accountLinkService').configured())throw new ApiError(503,'Отправка писем пока не настроена');
     try{return await require('../services/mailService/mailService').sendTestMail();}
-    catch{throw new ApiError(503,'Почтовый сервер не принял письмо. Проверьте пароль приложения и настройки почты');}
+    catch(error){throw new ApiError(503,error.code==='EAUTH'
+        ? 'Gmail отклонил пароль приложения. Создайте новый пароль приложения для выбранного почтового аккаунта и обновите SMTP_PASSWORD'
+        : 'Не удалось отправить письмо: '+({ETIMEDOUT:'почтовый сервер не ответил вовремя',ECONNECTION:'нет соединения с почтовым сервером',ESOCKET:'ошибка защищённого соединения',EENVELOPE:'почтовый адрес отклонён'}[error.code]||'почтовый сервер не принял письмо'));}
 }));
 router.post('/staff-invitations',wrap(req=>require('../services/accountLinkService').invite(req.user,req.body)));
 router.get('/staff-contacts/:id',wrap(req=>require('../services/staffContactService').read(req.user,req.params.id)));

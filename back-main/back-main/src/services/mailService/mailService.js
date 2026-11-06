@@ -12,7 +12,9 @@ class MailService {
             socketTimeout: 15000,
             auth: {
                 user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD
+                pass: process.env.SMTP_HOST==='smtp.gmail.com'
+                    ? String(process.env.SMTP_PASSWORD||'').replace(/\s+/g,'')
+                    : process.env.SMTP_PASSWORD
             }
         })
     }
