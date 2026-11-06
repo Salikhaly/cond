@@ -62,6 +62,9 @@ router.use(auth(), async (req, res, next) => {
     } catch (e) { next(e); }
 });
 router.get('/me', wrap(req => req.user));
+// One-use owner handover deliberately runs outside the operational idempotency transaction.
+router.post('/client-handover',async(req,res,next)=>{try{res.json(await require('../services/clientHandoverService').clean(req.user,req.body));}catch(e){next(e);}});
+router.get('/client-handover-backup',wrap(req=>require('../services/clientHandoverService').backup(req.user)));
 router.get('/account-email-status',wrap(async req=>{await require('../services/authorityService').owner(req.user);return {configured:require('../services/accountLinkService').configured()};}));
 router.post('/staff-invitations',wrap(req=>require('../services/accountLinkService').invite(req.user,req.body)));
 router.get('/staff-contacts/:id',wrap(req=>require('../services/staffContactService').read(req.user,req.params.id)));
