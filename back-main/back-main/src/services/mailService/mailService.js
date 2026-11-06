@@ -33,6 +33,15 @@ class MailService {
             text:(invite?'Вас пригласили в COND. Задайте пароль по ссылке (48 часов):':'Для смены пароля откройте ссылку (30 минут):')+'\n'+link+'\nЕсли вы не запрашивали письмо, проигнорируйте его.'});
     }
 
+    async sendTestMail() {
+        const to=process.env.SMTP_USER;
+        const result=await this.transporter.sendMail({from:process.env.SMTP_FROM||to,to,
+            subject:'COND — проверка почты',
+            text:'Отправка писем COND подключена. Приложение может отправлять приглашения сотрудникам и ссылки для сброса пароля. Это проверочное письмо, отвечать на него не нужно.'});
+        if(!result.accepted?.includes(to))throw new Error('Mail not accepted');
+        return {sent:true,to};
+    }
+
 }
 
 module.exports = new MailService();
