@@ -13,7 +13,7 @@ module.exports={
    if(typeof b.active!=='boolean')throw ApiError.badRequest('Укажите состояние товара');
    const stock=await M.Stock.findByPk(p.id,{transaction:t,lock:t.LOCK.UPDATE});
    if(!b.active){
-    if(Number(stock?.kg||p.weightTotal)>0||Number(stock?.reservedKg)>0)throw new ApiError(409,'На складе есть продукция. Сначала отгрузите или спишите остаток');
+    if(Math.abs(Number(stock?.kg??p.weightTotal))>.00001||Number(stock?.reservedKg)>0)throw new ApiError(409,'Сначала закройте остаток продукции на складе');
     const returns=await M.GoodsReturn.findAll({where:{status:{[Op.in]:['requested','posted']}},transaction:t});
     for(const r of returns){const line=r.lines.find(l=>l.productId===p.id);if(r.status==='requested'&&(line||r.replacements.some(l=>l.productId===p.id)))throw new ApiError(409,'Есть запрос на возврат или обмен этого товара');if(line&&r.status==='posted'){const done=await M.ReturnDisposition.sum('kg',{where:{returnId:r.id,productId:p.id},transaction:t});if(Number(done||0)<line.kg-.00001)throw new ApiError(409,'Возврат этого товара находится на проверке');}}
     const orders=await M.Order.findAll({where:{status:{[Op.in]:['submitted','approved']}},transaction:t});
@@ -61,7 +61,7 @@ module.exports={
   const m=await M.Material.findByPk(id,{transaction:t,lock:t.LOCK.UPDATE});if(!m)throw ApiError.notFound('Материал не найден');
   if(b.active!==undefined){
    if(typeof b.active!=='boolean')throw ApiError.badRequest('Укажите состояние материала');
-   if(!b.active){if(Number(m.quantity)>0)throw new ApiError(409,'Материал ещё есть на складе');if(m.kind==='box'&&await M.ProductPack.count({where:{boxMaterialId:m.id},transaction:t}))throw new ApiError(409,'Коробка используется в товаре. Сначала удалите тип коробки у товара');const recipes=await M.Recipe.findAll({where:{active:true},transaction:t});if(recipes.some(r=>r.lines.some(l=>l.materialId===m.id)))throw new ApiError(409,'Материал используется в рецептуре. Сначала измените состав');}
+   if(!b.active){if(Math.abs(Number(m.quantity))>.00001)throw new ApiError(409,'Сначала закройте остаток материала');if(m.kind==='box'&&await M.ProductPack.count({where:{boxMaterialId:m.id},transaction:t}))throw new ApiError(409,'Коробка используется в товаре. Сначала удалите тип коробки у товара');const recipes=await M.Recipe.findAll({where:{active:true},transaction:t});if(recipes.some(r=>r.lines.some(l=>l.materialId===m.id)))throw new ApiError(409,'Материал используется в рецептуре. Сначала измените состав');}
    return m.update({active:b.active},{transaction:t});
   }
   const values={};

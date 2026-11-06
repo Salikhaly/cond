@@ -11,7 +11,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api, fmt, moneyFmt, today } from './api';
 import { Field, Badge, Empty, Table } from './Fields';
 import ProductPhoto from './ProductPhoto';
-import {orderReadiness} from './orderReadiness';
+import {orderReadiness,canApproveOrder} from './orderReadiness';
 import { InvoiceBatch } from './PrintDocuments';
 
 const money = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -47,7 +47,7 @@ function OrderCard({ order, admin, run, busy, onPrint, onReturn, onPlan, onOpen,
         {order.status==='shipped'&&order.lines.filter(l=>l.shipmentPacks?.length).map(l=><p className="op-muted" key={l.productId}>{l.name}: {l.shipmentPacks.map(p=>fmt(p.boxes)+' '+boxWord(p.boxes)+' по '+fmt(p.capacityKg)+' кг').join(' · ')}{Number(l.shipmentLooseKg)>0?' · без коробок '+fmt(l.shipmentLooseKg)+' кг':''}{Number(l.shipmentOpenedKg)>0?' · остаток из открытой коробки '+fmt(l.shipmentOpenedKg)+' кг':''}</p>)}
         <div className="op-actions">
             {order.status === 'shipped' && onReturn && <button className="secondary" onClick={() => onReturn(order.id)}>Возврат / Обмен</button>}
-            {!order._pending && admin && order.status === 'submitted' && !missing.length && <button disabled={busy || missing.length > 0 || prices.some(p => p === '' || p == null || Number(p) < 0)} onClick={() => setConfirm('approved')}>Подтвердить заказ</button>}
+            {admin && canApproveOrder(order,products) && <button disabled={busy || prices.some(p => p === '' || p == null || Number(p) < 0)} onClick={() => setConfirm('approved')}>Подтвердить заказ</button>}
             {!order._pending && admin && order.status === 'approved' && <button disabled={busy||!shipmentReady} onClick={() => setConfirm('shipped')}>Подтвердить отгрузку</button>}
             {!order._pending && ['submitted', 'approved'].includes(order.status) && <button className="ghost danger" disabled={busy} onClick={() => setConfirm('cancelled')}>Отменить заявку</button>}
         </div>

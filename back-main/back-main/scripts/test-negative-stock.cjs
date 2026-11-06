@@ -14,6 +14,7 @@ const check=(v,label)=>{assert.ok(v,label);n++;console.log('PASS '+label);},near
  const order=async(boxes)=>{const o=await ops.order(owner,{company:'Магазин · минус',deliveryDate:date,lines:[{productId:p.id,packId:pack.id,boxes}]});await ops.orderStatus(owner,o.id,{status:'approved',prices:[1000]});return o;};
  const a=await order(2),b=await order(1);await ops.orderStatus(owner,a.id,{status:'shipped'});await ops.orderStatus(owner,b.id,{status:'shipped'});
  check(near((await M.Stock.findByPk(p.id)).kg,-3)&&near((await M.PackStock.findByPk(pack.id)).boxes,-3),'Two shipments create exact negative finished kg and boxes');
+ await assert.rejects(()=>require('../src/services/catalogAdminService').product(owner,p.id,{active:false}),/остаток/);check(true,'Archiving cannot hide a negative finished balance');
  await assert.rejects(()=>ops.orderStatus(owner,a.id,{status:'shipped'}));check(near((await M.Stock.findByPk(p.id)).kg,-3),'Repeated shipment cannot spend stock twice');
  const emptyValue=await M.StockValue.findByPk(p.id);check(near(emptyValue.value,0)&&near(emptyValue.knownKg,0),'Missing stock has unknown cost, not invented profit');
  const output=async(boxes)=>{const d=await ops.production(worker,{productId:p.id,packId:pack.id,boxes,date});const calc=await ops.preview(owner,{productId:p.id,packId:pack.id,boxes});await ops.postProduction(owner,d.id);return {d,calc};};

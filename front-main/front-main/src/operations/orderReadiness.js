@@ -44,4 +44,8 @@ function orderReadiness(order,products=[]){
  }
  return {ready:!unknown&&!missing.length&&demands.size>0,unknown,missing};
 }
-module.exports={orderReadiness};
+function canApproveOrder(order,products=[]){
+ const readiness=orderReadiness(order,products);
+ return order.status==='submitted'&&!order._pending&&!readiness.unknown&&(order.lines||[]).length>0&&(readiness.ready||order.lines.every(l=>products.find(p=>String(p.id)===String(l.productId))?.allowNegativeStock===true));
+}
+module.exports={orderReadiness,canApproveOrder};
