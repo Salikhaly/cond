@@ -3,8 +3,9 @@ const money=n=>Math.round((Number(n)+Number.EPSILON)*100)/100;
 function stockSaleValue(data,onDate){
  const customers=(data.customers||[]).filter(c=>c.active!==false),outlets=(data.outlets||[]).filter(o=>o.active!==false),rules=data.clientPrices||[];
  const targets=customers.flatMap(c=>{const shops=outlets.filter(o=>o.customerId===c.id);return shops.length?shops.map(o=>({customerId:c.id,outletId:o.id,priceSource:[c.name,o.name].filter(Boolean).join(' · ')} )):[{customerId:c.id,outletId:null,priceSource:c.name}];});
- const rows=[];
+ const rows=[],unverified=(data.products||[]).filter(p=>p.stockVerified===false).length;
  for(const p of data.products||[]){
+  if(p.stockVerified===false)continue;
   const packs=p.packs||[],boxedKg=packs.reduce((s,b)=>s+Math.max(0,Number(b.boxes)||0)*Number(b.capacityKg),0);
   const add=(pack,quantity)=>{
    if(!(quantity>0))return;
@@ -16,6 +17,6 @@ function stockSaleValue(data,onDate){
   for(const pack of packs)add(pack,Math.max(0,Number(pack.boxes)||0));
   add(null,Math.max(0,Math.round((Number(p.kg||0)-boxedKg)*10000)/10000));
  }
- return {rows,total:money(rows.reduce((s,r)=>s+(r.value||0),0)),unknown:rows.filter(r=>r.value==null).length,boxes:rows.filter(r=>r.unit==='box').reduce((s,r)=>s+r.quantity,0),kg:rows.reduce((s,r)=>s+r.kg,0)};
+ return {rows,unverified,total:money(rows.reduce((s,r)=>s+(r.value||0),0)),unknown:rows.filter(r=>r.value==null).length,boxes:rows.filter(r=>r.unit==='box').reduce((s,r)=>s+r.quantity,0),kg:rows.reduce((s,r)=>s+r.kg,0)};
 }
 module.exports={stockSaleValue};

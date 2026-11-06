@@ -32,7 +32,7 @@ function CountEditor({doc,run,busy,onBack,onSaved,onCorrect}){
 export default function StockCounts({data,run,busy,initialAction,onNavigate}){
  const [reallocating,setReallocating]=useState(false),[reallocationProduct,setReallocationProduct]=useState(null);
  const [selected,setSelected]=useState(null),[adding,setAdding]=useState(false),[kind,setKind]=useState('product'),[date,setDate]=useState(today()),[note,setNote]=useState(''),[corrects,setCorrects]=useState(null),[search,setSearch]=useState(''),[chosen,setChosen]=useState(null),[showAllItems,setShowAllItems]=useState(false);
- useEffect(()=>{if(initialAction?.kind==='count-document')setSelected((data.stockCounts||[]).find(d=>d.id===initialAction.id)||null);},[initialAction]);
+ useEffect(()=>{if(initialAction?.kind==='reallocation'){setSelected(null);setReallocationProduct(initialAction.productId);setReallocating(true);}if(initialAction?.kind==='count-document')setSelected((data.stockCounts||[]).find(d=>d.id===initialAction.id)||null);},[initialAction]);
  const fresh=selected&&(data.stockCounts||[]).find(d=>d.id===selected.id),doc=fresh&&new Date(fresh.updatedAt)>=new Date(selected.updatedAt)?fresh:selected;
  const items=kind==='product'?data.products.flatMap(p=>(p.packs||[]).length?p.packs.map(pack=>({id:pack.id,name:p.name+' · '+fmt(pack.capacityKg)+' кг',weight:pack.capacityKg,kg:pack.boxes,stockUnit:'кор.',countKind:'pack'})):[p]):data.materials,ids=chosen??[],totals=stockCountMetrics(data);
  const toggle=id=>setChosen(ids.includes(id)?ids.filter(i=>i!==id):[...ids,id]);

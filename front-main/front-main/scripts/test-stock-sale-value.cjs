@@ -8,4 +8,5 @@ assert.equal(stockSaleValue({products:[{id:1,kg:1,salePrice:0}]},'2026-11-05').t
 assert.equal(stockSaleValue(data,'2026-11-05').rows[0].priceSource,'Клиент Б');
 assert.equal(stockSaleValue({products:[{id:3,kg:2,salePrice:100}]},'2026-11-05').rows[0].priceSource,'Цена каталога');
 data.customers[1].active=false;assert.equal(stockSaleValue(data,'2026-11-05').rows[0].priceSource,'Клиент А · Магазин 1');
-console.log('16 stock sale valuation checks passed');
+const partial=stockSaleValue({products:[{id:1,kg:5,salePrice:100,stockVerified:false,packs:[{id:'x',capacityKg:1,boxes:5,salePrice:100}]},{id:2,kg:2,salePrice:200}]},'2026-11-06');assert.equal(partial.total,400);assert.equal(partial.kg,2);assert.equal(partial.unverified,1);assert.equal(partial.rows.length,1);
+console.log('20 stock sale valuation checks passed');

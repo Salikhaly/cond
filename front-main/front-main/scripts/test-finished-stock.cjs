@@ -8,4 +8,5 @@ test('An explicit zero free stock does not fall back to gross stock',()=>{assert
 test('Representative projection does not invent gross or unpacked stock',()=>{const s=finishedStock({availableKg:3,packs:[{boxes:5,capacityKg:1}]});assert.equal(s.kg,null);assert.equal(s.looseKg,null);assert.equal(s.freeKg,3);});
 test('Old cache with gross and reserved quantities can derive free stock',()=>{assert.equal(finishedStock({kg:'5.5',reservedKg:'1.5'}).freeKg,4);});
 test('Negative or inconsistent quantities do not produce a negative loose balance',()=>{const s=finishedStock({kg:1,reservedKg:0,availableKg:1,packs:[{boxes:2,capacityKg:1}]});assert.equal(s.looseKg,0);});
+test('Imported balance remains explicitly unverified even when recorded zero',()=>{assert.equal(finishedStock({kg:0,availableKg:0,stockVerified:false}).verified,false);assert.equal(finishedStock({kg:0,availableKg:0,stockVerified:true}).verified,true);});
 console.log(checks+' finished-stock checks passed');

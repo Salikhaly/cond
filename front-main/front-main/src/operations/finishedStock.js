@@ -6,6 +6,6 @@ function finishedStock(product){
  const boxes=packs.reduce((sum,p)=>sum+(number(p.boxes)||0),0);
  const boxedKg=packs.reduce((sum,p)=>sum+(number(p.boxes)||0)*(number(p.capacityKg)||0),0);
  const freeKg=number(product.availableKg)??(kg!==null&&reservedKg!==null?round(Math.max(0,kg-reservedKg)):null);
- return {kg,boxes,looseKg:kg===null?null:round(Math.max(0,kg-boxedKg)),freeKg,reservedKg};
+ return {verified:product.stockVerified!==false,kg,boxes,looseKg:kg===null?null:round(Math.max(0,kg-boxedKg)),freeKg,reservedKg};
 }
 module.exports={finishedStock};

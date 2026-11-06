@@ -31,6 +31,14 @@ let db,created=false,server,count=0;const check=(value,label)=>{assert.ok(value,
  check(await require('../src/services/tradeFinanceService').quote(shop.customerId,shop.id,product.id,today)===500,'Box prices never become per-kg prices');
  check(quoted.availability==='order'&&!('availableBoxes'in quoted)&&!('costPerBox'in quoted),'Availability reveals status without exact stock or cost');
  assert.deepEqual(Object.keys(catalog.shop).sort(),['address','name']);assert.deepEqual(Object.keys(quoted).sort(),['availability','capacityKg','id','price']);check(!JSON.stringify(catalog).includes('priceForEmployee')&&!JSON.stringify(catalog).includes('debt')&&!JSON.stringify(catalog).includes('base64'),'Guest API excludes payroll, debt and inline photo payloads');
+ await product.update({additional:{stockVerified:false}});
+ check((await call('/storefront',{token:link.token})).products.find(p=>p.id===product.id).packs.every(p=>p.availability==='unknown'),'Imported zero stock is unknown until physically reconciled');
+ await M.StockCount.create({date:today,status:'draft',lines:[{kind:'product',itemId:product.id}],actorId:owner.id,actorName:owner.name});
+ check((await call('/storefront',{token:link.token})).products.find(p=>p.id===product.id).packs.every(p=>p.availability==='unknown'),'A draft count does not verify imported balances');
+ const reallocation=require('../src/services/stockReallocationService'),snapshot=await reallocation.read(owner,product.id);
+ await reallocation.post(owner,product.id,{date:today,reason:'Фактический нулевой остаток',confirmed:true,expectedToken:snapshot.token,kg:0,packs:snapshot.packs.map(p=>({packId:p.id,boxes:0}))});
+ check((await call('/storefront',{token:link.token})).products.find(p=>p.id===product.id).packs.every(p=>p.availability==='order'),'Posted weight and box reconciliation makes actual zero stock known to the store');
+ check((await require('../src/services/operationsService').catalog(owner)).find(p=>p.id===product.id).stockVerified===true,'Owner and store agree on verification after posting');
  const extra=await Product.bulkCreate(Array.from({length:26},(_,i)=>({name:'Позиция '+String(i).padStart(2,'0'),weight:2.5,priceTotal:0,weightTotal:0,priceForEmployee:0,ingredients:[],additional:[]})));
  await M.ProductDisplay.bulkCreate(extra.map(p=>({productId:p.id,catalogVisible:true,catalogGroup:'Тест'})));
  await M.ProductPack.bulkCreate(extra.map(p=>({productId:p.id,boxMaterialId:pack.boxMaterialId,capacityKg:2.5,salePrice:1000})));
