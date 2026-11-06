@@ -51,6 +51,7 @@ export default function Production({ data, user, run, busy, initialAction, onNav
 
     useEffect(() => { if (preview) previewRef.current?.scrollIntoView({ block: 'start' }); }, [preview]);
     useEffect(() => {
+        if(initialAction?.kind!=='production-tasks')setTasksOpen(false);
         if(initialAction?.kind==='day-overview'){setDateFilter(initialAction.date);setStatus('all');setAdding(false);setTasksOpen(false);setDocumentId('');}
         else setDateFilter('');
         if(initialAction?.kind==='production-tasks'){setTasksOpen(true);setAdding(false);}
