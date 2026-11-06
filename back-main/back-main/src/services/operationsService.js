@@ -104,7 +104,15 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
         if (film && filmQty > 0) packagingLines.push({ materialId: film.id, name: film.name, unit: film.unit, quantity: filmQty, unitCost: Number(film.unitCost), cost: money(filmQty * Number(film.unitCost)), balance: Number(film.quantity), enough: Number(film.quantity) >= filmQty });
     }
     const priceProof=await require('./materialPriceService').known([...lines,...packagingLines],tx);
-    for(const line of [...lines,...packagingLines])line.costKnown=priceProof.has(String(line.materialId));
+    for(const line of [...lines,...packagingLines]){
+        line.costKnown=priceProof.has(String(line.materialId));
+        if(allowNegative()&&!line.enough){
+            // Future receipts can have another price. Only value the stock actually available.
+            line.unvaluedQuantity=round(line.quantity-Math.max(0,line.balance));
+            line.cost=round((line.costKnown?Math.max(0,line.balance):0)*line.unitCost);
+            line.costKnown=false;
+        }
+    }
     const costComplete=[...lines,...packagingLines].every(l=>l.costKnown);
     const materialCost = round(lines.reduce((s, l) => s + l.cost, 0));
     const packagingCost = round(packagingLines.reduce((s, l) => s + l.cost, 0));
