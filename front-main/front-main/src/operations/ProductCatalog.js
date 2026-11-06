@@ -19,7 +19,8 @@ function ProductEditor({ rules=[], product, onBack, onSaved, run, busy }) {
         priceForEmployee: product.priceForEmployee ?? 0,
         pricePerKg: product.salePrice ?? '',
         description: product.description || '',
-    } : { name: '', weight: 1, priceForEmployee: 0, pricePerKg: '', description: '' });
+        manualCostEnabled: product.manualCostEnabled===true,manualCostPerKg:product.manualCostPerKg??'',expectedManualCostVersion:product.manualCostVersion??0,
+    } : { name: '', weight: 1, priceForEmployee: 0, pricePerKg: '', description: '',manualCostEnabled:true,manualCostPerKg:'' });
     const change = (key, value) => setForm(f => ({ ...f, [key]: value }));
     return <section className="op-card op-simple-editor"><button className="ghost" onClick={onBack}>← К товарам</button><h2>{product ? 'Изменить товар' : 'Новый товар'}</h2>
         <form onSubmit={e => {
@@ -34,6 +35,8 @@ function ProductEditor({ rules=[], product, onBack, onSaved, run, busy }) {
             <Field label="Название" required maxLength={250} value={form.name} onChange={e => change('name', e.target.value)} />
             {product&&!rules.length&&!product?.packs?.length&&<Field label="Вместимость коробки, кг" type="number" min="0.01" step="0.01" required value={form.weight} onChange={e => change('weight', e.target.value)} />}
             <Field label="Цена за 1 кг, ₸" type="number" min="0" step="0.01" value={form.pricePerKg} onChange={e => change('pricePerKg', e.target.value)} />
+            <label className="op-check"><input type="checkbox" checked={form.manualCostEnabled} onChange={e=>change('manualCostEnabled',e.target.checked)}/>Себестоимость вручную</label>
+            {form.manualCostEnabled&&<><Field label="Сырьё и упаковка на 1 кг, ₸" type="number" min="0" step="0.01" value={form.manualCostPerKg} onChange={e=>change('manualCostPerKg',e.target.value)}/><p className="op-field-hint">Работа прибавится автоматически. Пусто — стоимость пока неизвестна.</p></>}
             <details className="op-help"><summary>Работа и описание</summary>
             <Field label="Оплата работнику за кг, ₸" disabled={product?.wageRateLocked} type="number" min="0" step="0.01" value={form.priceForEmployee} onChange={e => change('priceForEmployee', e.target.value)} />
             <Field label="Описание покупателю"><textarea maxLength={1500} value={form.description} onChange={e => change('description', e.target.value)} /></Field>
@@ -54,10 +57,10 @@ export default function ProductCatalog({ data, run, busy, initialAction, onProdu
     const openProduct=id=>{listScroll.current=document.querySelector('.op-main')?.scrollTop||0;setFocused(id);};
     useLayoutEffect(()=>{document.querySelector('.op-main')?.scrollTo({top:focused||recipeId||editing!==null||photoEditing||packaging?0:listScroll.current});},[focused,recipeId,editing,photoEditing,packaging]);
     useEffect(()=>setLimit(12),[search,archived]);
-    useEffect(()=>{if(initialAction?.kind==='add')setEditing({});if(initialAction?.kind==='product'){setFocused(Number(initialAction.productId));setPhotoEditing(false);setEditing(null);setRecipeId(null);}},[initialAction]);
+    useEffect(()=>{if(initialAction?.kind==='add')setEditing({});if(initialAction?.kind==='edit'){const target=(data.products||[]).find(p=>p.id===Number(initialAction.productId));if(target){setRecipeId(null);setEditing(target);}}if(initialAction?.kind==='product'){setFocused(Number(initialAction.productId));setPhotoEditing(false);setEditing(null);setRecipeId(null);}},[initialAction]);
     if (packaging) return <><button className="ghost" onClick={() => setPackaging(false)}>← К товарам</button><Packaging onNavigate={onNavigate} data={data} run={run} busy={busy} /></>;
     const recipeProduct = (data.products || []).find(p => Number(p.id) === Number(recipeId));
-    if (recipeProduct) return <RecipeWorkspace key={recipeProduct.id} product={recipeProduct} data={data} run={run} busy={busy} onClose={() => setRecipeId(null)} onFullCost={data.permissions?.finance!==false&&onNavigate?()=>onNavigate('recipes',{kind:'full-cost'}):null} onMaterial={onNavigate?issue=>issue.kind==='material'&&issue.scope==='packaging'?onNavigate('packaging'):onNavigate('materials',issue.materialId?{kind:'receipt',materialId:issue.materialId}:{kind:'search',query:''}):null}/>;
+    if (recipeProduct) return <RecipeWorkspace onManualCost={()=>{setRecipeId(null);setEditing(recipeProduct);}} key={recipeProduct.id} product={recipeProduct} data={data} run={run} busy={busy} onClose={() => setRecipeId(null)} onFullCost={data.permissions?.finance!==false&&onNavigate?()=>onNavigate('recipes',{kind:'full-cost'}):null} onMaterial={onNavigate?issue=>issue.kind==='material'&&issue.scope==='packaging'?onNavigate('packaging'):onNavigate('materials',issue.materialId?{kind:'receipt',materialId:issue.materialId}:{kind:'search',query:''}):null}/>;
     if (editing !== null) return <ProductEditor rules={data.boxRules||[]} product={editing.id ? editing : null} run={run} busy={busy} onBack={() => setEditing(null)} onSaved={saved=>{setEditing(null);if(saved?.id)setFocused(Number(saved.id));}} />;
     const product=[...(data.products||[]),...(data.archivedProducts||[])].find(p=>Number(p.id)===Number(focused));
     const productArchived=product&&!(data.products||[]).some(p=>Number(p.id)===Number(product.id));

@@ -44,7 +44,7 @@ async function initialise() {
     });
 }
 async function capture(t) {
-    const data = { schema: 'cond.replica.v1', capturedAt: new Date().toISOString() };
+    const data = { schema: 'cond.replica.v1', capturedAt: new Date().toISOString(), manualCostDefault:process.env.COND_MANUAL_COST_DEFAULT==='true' };
     for (const [key, model] of Object.entries(M).filter(([key])=>key!=='StaffContact')) data[key] = await model.findAll({ raw: true, transaction: t });
     for (const [key, model] of Object.entries({ products: Product, payroll: Salary, incomes: Income, outcomes: Outcome, categories: OutcomeCategory, relations: BusinessRelation, advances: Advance, reports: Report, reportProducts: ReportProducts, relationProducts: BusinessRelationProducts })) data[key] = await model.findAll({ raw: true, transaction: t });
     data.users = await User.findAll({ attributes: ['id', 'name', 'email', 'role'], raw: true, transaction: t });
@@ -137,7 +137,7 @@ async function dashboard(user) {
         const s = d.Stock.find(s => s.productId === p.id);
         const card=(d.ProductDisplay||[]).find(c=>c.productId===p.id);
         const common = {packKg:(d.PackagingVariant||[]).find(v=>v.productId===p.id)?.kgPerPack??null,salePrice:(d.SellingPrice||[]).find(x=>x.productId===p.id)?.price??null, id: p.id, name: p.name, weight: p.weight, photo:card?.photo||'',description:card?.description||'',image:p.image||'',availableKg: Number(s?.kg || 0) - Number(s?.reservedKg || 0) };
-        return user.role === 'representative' ? common : { ...common,wageRateLocked:d.Production.some(r=>r.productId===p.id&&['draft','posted'].includes(r.status)), packLaborPerPack:(d.PackagingVariant||[]).find(v=>v.productId===p.id)?.laborPerPack??null,kg: s?.kg, reservedKg: s?.reservedKg, priceForEmployee: p.priceForEmployee };
+        return user.role === 'representative' ? common : { ...common,...require('./manualCostService').view((d.LegacyLink||[]).find(r=>r.id==='product-manual-cost:'+p.id),d.manualCostDefault===true),wageRateLocked:d.Production.some(r=>r.productId===p.id&&['draft','posted'].includes(r.status)), packLaborPerPack:(d.PackagingVariant||[]).find(v=>v.productId===p.id)?.laborPerPack??null,kg: s?.kg, reservedKg: s?.reservedKg, priceForEmployee: p.priceForEmployee };
     });
     const own = row => user.role === 'super_admin' || row.userId === sourceUser.id;
     const base = { payrollPaymentInfo:(d.PayrollPaymentInfo||[]).filter(i=>user.role==='super_admin'||(d.Payment||[]).some(p=>p.id===i.paymentId&&p.workerId===sourceUser.id)),products, orders: d.Order.filter(own), sync: { mode: 'cloud', readOnly: true, receivedAt: replica.receivedAt } };

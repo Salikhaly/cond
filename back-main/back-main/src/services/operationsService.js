@@ -43,13 +43,16 @@ async function catalog(user) {
     const catalogRecipes=await M.Recipe.findAll({where:{active:true}});
     const knownPrices=await require('./materialPriceService').known(packagingMaterials);
     const boxRules=await M.BoxRule.findAll();
+    const manualRows=await M.LegacyLink.findAll({where:{id:{[Op.like]:'product-manual-cost:%'}}});
+    const manualFor=p=>require('./manualCostService').view(manualRows.find(r=>r.id==='product-manual-cost:'+p.id));
     const packView = p => packs.filter(x=>x.productId===p.id).map(raw=>{const x=require('./boxRuleService').effective(raw,boxRules.find(r=>r.boxMaterialId===raw.boxMaterialId));
         const box=packagingMaterials.find(m=>m.id===x.boxMaterialId),stock=packStocks.find(s=>s.packId===x.id),film=selectFilm(x,packagingMaterials);
         const recipe=catalogRecipes.find(r=>r.productId===p.id),ingredients=require('../domain/recipeIngredients').ingredientLines(recipe,packagingMaterials),valid=ingredients.length&&Number(recipe.outputKg)>0&&ingredients.every(l=>packagingMaterials.some(m=>m.id===l.materialId&&m.active));
         const rawCost=valid?ingredients.reduce((sum,l)=>{const m=packagingMaterials.find(m=>m.id===l.materialId),qty=round(Number(l.quantity)*Number(x.capacityKg)/Number(recipe.outputKg));return sum+round(qty*Number(m.unitCost));},0):0;
         const overheadPerBox=recipe?money(Number(recipe.overhead||0)*Number(x.capacityKg)/Number(recipe.outputKg)):Number(x.overheadPerBox||0);
         const pricesKnown=ingredients.every(l=>knownPrices.has(String(l.materialId)))&&knownPrices.has(String(box?.id))&&(!(Number(x.filmQtyM)>0)||knownPrices.has(String(film?.id)));
-        const costPerBox=valid&&pricesKnown&&box?.active&&(!(Number(x.filmQtyM)>0)||film)?round(rawCost+money(Number(box.unitCost))+money(Number(film?.unitCost||0)*Number(x.filmQtyM||0))+Number(x.laborPerBox||0)+overheadPerBox):null;
+        const recipeCostPerBox=valid&&pricesKnown&&box?.active&&(!(Number(x.filmQtyM)>0)||film)?round(rawCost+money(Number(box.unitCost))+money(Number(film?.unitCost||0)*Number(x.filmQtyM||0))+Number(x.laborPerBox||0)+overheadPerBox):null;
+        const manual=manualFor(p),costPerBox=manual.manualCostEnabled?(manual.manualCostPerKg==null?null:round(manual.manualCostPerKg*Number(x.capacityKg)+Number(x.laborPerBox||0))):recipeCostPerBox;
         const fallback=sellingPrices.find(s=>s.productId===p.id)?.price;
         const salePrice=x.salePrice==null?(fallback==null?null:money(Number(fallback)*Number(x.capacityKg))):Number(x.salePrice);
         return {id:x.id,capacityKg:Number(x.capacityKg),boxMaterialId:x.boxMaterialId,filmMaterialId:film?.id||null,boxName:box?.name||('Коробка '+x.capacityKg+' кг'),filmQtyM:Number(x.filmQtyM||0),salePrice,costPerBox:Number(x.filmQtyM)>0&&!film?null:costPerBox,filmSelectionRequired:Number(x.filmQtyM)>0&&!film,availableBoxes:round(Number(stock?.boxes||0)-Number(stock?.reservedBoxes||0)),boxes:round(stock?.boxes||0),reservedBoxes:round(stock?.reservedBoxes||0),laborPerBox:Number(x.laborPerBox||0),overheadPerBox};
@@ -67,14 +70,16 @@ async function catalog(user) {
         const s = stocks.find(s => s.productId === p.id);
         const display=displays.find(d=>d.productId===p.id);
         const common = {allowNegativeStock:allowNegative(),stockVerified:p.additional?.stockVerified!==false||stockCounts.some(c=>c.lines.some(l=>l.kind==='product'&&Number(l.itemId)===p.id)), packKg,packs:packView(p),salePrice:sellingPrices.find(x=>x.productId===p.id)?.price ?? null,id: p.id, name: p.name, weight: p.weight, photo:'',hasPhoto:Boolean(display?.hasPhoto),photoVersion:Number(display?.photoVersion||0),photoUrl:display?.hasPhoto?'/api/operations/products/'+p.id+'/photo?v='+Number(display.photoVersion||0):'',catalogGroup:display?.catalogGroup||'',catalogVisible:display?.catalogVisible===true,sortOrder:Number(display?.sortOrder||0), description:display?.description || '', image:p.image || '', availableKg: round(Number(s.kg) - Number(s.reservedKg)) };
-        if (user.role === 'representative') return common;
-        return { ...common,wageRateLocked:used.some(x=>x.productId===p.id), packLaborPerPack:variants.find(v=>v.productId===p.id)?.laborPerPack??null,kg: s.kg, reservedKg: s.reservedKg, priceForEmployee: p.priceForEmployee };
+        if (user.role === 'representative') return {...common,packs:common.packs.map(({costPerBox,laborPerBox,overheadPerBox,...safe})=>safe)};
+        return { ...common,...manualFor(p),wageRateLocked:used.some(x=>x.productId===p.id), packLaborPerPack:variants.find(v=>v.productId===p.id)?.laborPerPack??null,kg: s.kg, reservedKg: s.reservedKg, priceForEmployee: p.priceForEmployee };
     });
 }
 
 async function calculate(productId, kg, tx, workerId, workDate, packId, inputBoxes) {
-    const recipe = required(await M.Recipe.findOne({ where: { productId, active:true }, transaction: tx }), 'Рецептура');
     const product = required(await Product.findByPk(productId, { transaction: tx }), 'Товар');
+    const manual=await require('./manualCostService').get(productId,tx);
+    const savedRecipe=await M.Recipe.findOne({where:{productId,active:true},transaction:tx});
+    const recipe=savedRecipe||(manual.manualCostEnabled?{outputKg:1,overhead:0,lines:[],version:0}:required(null,'Рецептура'));
     if(!product.is_active)throw ApiError.badRequest('Товар в архиве');
     const rawPack = packId ? required(await M.ProductPack.findByPk(packId, { transaction: tx }), 'Тип коробки') : null;
     const pack=rawPack?require('./boxRuleService').effective(rawPack,await M.BoxRule.findByPk(rawPack.boxMaterialId,{transaction:tx})):null;
@@ -91,7 +96,7 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
         if (quantity <= 0) throw ApiError.badRequest('Слишком малый выпуск для точности учёта');
         lines.push({ materialId: material.id, name: material.name, unit: material.unit, quantity, unitCost: Number(material.unitCost), cost: round(quantity * Number(material.unitCost)), balance: Number(material.quantity), enough: Number(material.quantity) >= quantity });
     }
-    if(pack&&!lines.length)throw ApiError.badRequest('Добавьте ингредиенты в состав товара. Коробка и плёнка учитываются отдельно');
+    if(pack&&!lines.length&&!manual.manualCostEnabled)throw ApiError.badRequest('Добавьте ингредиенты в состав товара. Коробка и плёнка учитываются отдельно');
     const packagingLines = [];
     if (pack) {
         const box = required(await M.Material.findByPk(pack.boxMaterialId, { transaction: tx, ...(tx ? { lock: tx.LOCK.UPDATE } : {}) }), 'Коробка');
@@ -113,9 +118,9 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
             line.costKnown=false;
         }
     }
-    const costComplete=[...lines,...packagingLines].every(l=>l.costKnown);
-    const materialCost = round(lines.reduce((s, l) => s + l.cost, 0));
-    const packagingCost = round(packagingLines.reduce((s, l) => s + l.cost, 0));
+    const costComplete=manual.manualCostEnabled?manual.manualCostPerKg!=null:[...lines,...packagingLines].every(l=>l.costKnown);
+    const materialCost = manual.manualCostEnabled?round(totalKg*Number(manual.manualCostPerKg||0)):round(lines.reduce((s, l) => s + l.cost, 0));
+    const packagingCost = manual.manualCostEnabled?0:round(packagingLines.reduce((s, l) => s + l.cost, 0));
     const variant=await M.PackagingVariant.findByPk(product.id,{transaction:tx});
     const policy=workerId?await require('./workPolicyService').at(workerId,workDate||require('./businessDay').today(),tx):null;
     const profile=workerId?await M.WorkProfile.findByPk(workerId,{transaction:tx}):null;
@@ -128,14 +133,14 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
     if(boxRate!=null&&!pack)throw ApiError.badRequest('Для оплаты за коробку выберите тип коробки и количество');
     const laborCost=pack&&piece?money(boxRate!=null?boxes*boxRate:effectiveRate!=null?totalKg*effectiveRate:boxes*Number(pack.laborPerBox||0)):piece?money(effectiveRate!=null?totalKg*effectiveRate:variant?totalKg/Number(variant.kgPerPack)*Number(variant.laborPerPack):totalKg*Number(product.priceForEmployee)):0;
     const reportedRate=piece&&pack?round(laborCost/totalKg):effectiveRate!=null?effectiveRate:Number(product.priceForEmployee);
-    const overheadCost = pack ? money(Number(recipe.overhead) * totalKg / Number(recipe.outputKg)) : round(Number(recipe.overhead) * totalKg / Number(recipe.outputKg));
+    const overheadCost = manual.manualCostEnabled?0:pack ? money(Number(recipe.overhead) * totalKg / Number(recipe.outputKg)) : round(Number(recipe.overhead) * totalKg / Number(recipe.outputKg));
     const totalCost = round(materialCost + packagingCost + laborCost + overheadCost);
     const selling=await M.SellingPrice.findByPk(product.id,{transaction:tx});
     const productionPrice=pack?.salePrice!=null?Number(pack.salePrice):selling?.price!=null?Number(selling.price)*(pack?Number(pack.capacityKg):1):null;
     const productionValue=productionPrice==null?null:money(productionPrice*(pack?boxes:totalKg));
     if(policy?.mode==='monthly'&&Number(policy.percent)>0&&productionValue==null)throw ApiError.badRequest('Укажите продажную цену товара: от неё считается процент работника');
 
-    return { productId: product.id, productName: product.name, kg: totalKg, boxes, packId: pack?.id||null, capacityKg: pack?Number(pack.capacityKg):null, recipeVersion: recipe.version, productionPrice, productionValue, productionPriceUnit:pack?'box':'kg', costComplete, workMode:policy?.mode||'piece',ratePerKg:piece?reportedRate:0, lines, packagingLines, materialCost, packagingCost, laborCost, overheadCost, totalCost, costPerKg: round(totalCost / totalKg), costPerBox: boxes?round(totalCost/boxes):null, allowNegativeStock:allowNegative(), enough: [...lines,...packagingLines].every(l => l.enough) };
+    return { costMode:manual.manualCostEnabled?'manual':'recipe',manualCostPerKg:manual.manualCostEnabled?manual.manualCostPerKg:null,recipeMissing:!savedRecipe,productId: product.id, productName: product.name, kg: totalKg, boxes, packId: pack?.id||null, capacityKg: pack?Number(pack.capacityKg):null, recipeVersion: recipe.version, productionPrice, productionValue, productionPriceUnit:pack?'box':'kg', costComplete, workMode:policy?.mode||'piece',ratePerKg:piece?reportedRate:0, lines, packagingLines, materialCost, packagingCost, laborCost, overheadCost, totalCost, costPerKg: round(totalCost / totalKg), costPerBox: boxes?round(totalCost/boxes):null, allowNegativeStock:allowNegative(), enough: [...lines,...packagingLines].every(l => l.enough) };
 }
 
 module.exports = {
@@ -374,6 +379,7 @@ module.exports = {
             const filmQtyM = b.filmQtyM == null || b.filmQtyM === '' ? 0 : num(b.filmQtyM, 'плёнка на коробку', true);
             const p = await Product.create({ name: text(b.name, 'название'), weight: capacity, priceForEmployee: rate, ingredients: [], additional: [], quantity: 0, weightTotal: 0, priceTotal: 0 }, { transaction: t });
             await M.Stock.create({ productId: p.id }, { transaction: t });
+            await require('./manualCostService').save(user,p.id,b,t);
             const basePerKg = b.pricePerKg != null && b.pricePerKg !== ''
                 ? num(b.pricePerKg, 'цена за кг', true)
                 : b.salePrice != null && b.salePrice !== '' ? num(b.salePrice, 'цена за коробку', true) / capacity : null;
@@ -459,7 +465,7 @@ module.exports = {
             if (b.expectedCalculation !== undefined) {
                 const expected = b.expectedCalculation;
                 const fields = ['recipeVersion', 'materialCost', 'laborCost', 'overheadCost', 'totalCost'];
-                const same = expected && !Array.isArray(expected) && fields.every(k => Number(expected[k]) === Number(calc[k])) && (expected.costComplete===undefined||expected.costComplete===calc.costComplete) && (expected.productionValue===undefined||expected.productionValue===calc.productionValue) && Array.isArray(expected.lines) && expected.lines.length === calc.lines.length && calc.lines.every(l => expected.lines.some(x => x && x.materialId === l.materialId && Number(x.quantity) === Number(l.quantity) && Number(x.unitCost) === Number(l.unitCost)));
+                const same = expected && !Array.isArray(expected) && (expected.costMode===undefined||expected.costMode===calc.costMode) && (expected.manualCostPerKg===undefined||expected.manualCostPerKg===calc.manualCostPerKg) && fields.every(k => Number(expected[k]) === Number(calc[k])) && (expected.costComplete===undefined||expected.costComplete===calc.costComplete) && (expected.productionValue===undefined||expected.productionValue===calc.productionValue) && Array.isArray(expected.lines) && expected.lines.length === calc.lines.length && calc.lines.every(l => expected.lines.some(x => x && x.materialId === l.materialId && Number(x.quantity) === Number(l.quantity) && Number(x.unitCost) === Number(l.unitCost)));
                 if (!same) throw new ApiError(409, 'Расчёт изменился. Закройте калькуляцию и нажмите «Проверить выпуск» заново');
             }
             if (!calc.enough && !allowNegative()) throw ApiError.badRequest('Недостаточно материалов: ' + [...calc.lines,...(calc.packagingLines||[])].filter(l => !l.enough).map(l => l.name).join(', '));

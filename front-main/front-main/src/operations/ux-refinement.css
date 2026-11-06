@@ -47,3 +47,6 @@
  .op-app .op-product-actions{display:flex;gap:8px;flex-wrap:wrap}
  .op-app .op-product-actions>button{flex:1 1 0!important;width:auto;min-width:0;min-height:44px;font-size:13px;padding:10px 8px}
 }
+
+.op-app .ux-pack-choices button{flex:1 1 100px;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.op-app .ux-pack-choices button small{display:block;font-size:11px;line-height:1.35;margin-top:3px;color:inherit}

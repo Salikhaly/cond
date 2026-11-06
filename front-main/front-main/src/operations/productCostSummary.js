@@ -7,6 +7,10 @@ function productCostSummary(product,data,packId){
  const recipe=(data.recipes||[]).find(r=>String(r.productId)===String(product.id)&&r.active!==false);
  const pack=(product.packs||[]).find(p=>String(p.id)===String(packId))||(product.packs||[])[0];
  const kg=Number(pack?.capacityKg||1),materials=data.materials||[],issues=[];
+ if(product.manualCostEnabled){
+  const rate=product.manualCostPerKg,known=rate!==null&&rate!==undefined&&rate!==''&&Number.isFinite(Number(rate)),ingredients=known?round(Number(rate)*kg):0,labor=pack?Number(pack.laborPerBox||0):Number(product.packKg)>0&&product.packLaborPerPack!=null?Number(product.packLaborPerPack)/Number(product.packKg):Number(product.priceForEmployee||0),total=round(ingredients+labor),salePrice=pack?pack.salePrice:product.salePrice;
+  return {pack,kg,recipe,lines:[],ingredients,packaging:0,labor,overhead:0,total,costPerKg:round(total/kg),salePrice:salePrice==null?null:Number(salePrice),margin:!known||salePrice==null?null:round(Number(salePrice)-total),issues:known?[]:[{kind:'manual',label:'Укажите себестоимость вручную в карточке товара'}],complete:known,manual:true};
+ }
  if(!recipe?.lines?.length||!(Number(recipe.outputKg)>0))issues.push({kind:'recipe',label:'Добавьте состав товара'});
  const costingRecipe=pack&&recipe?{...recipe,lines:ingredientLines(recipe,[...materials,...(data.archivedMaterials||[])])}:recipe;
  if(recipe&&pack&&!costingRecipe.lines.length)issues.push({kind:'recipe',label:'Добавьте ингредиенты: упаковка учитывается отдельно'});

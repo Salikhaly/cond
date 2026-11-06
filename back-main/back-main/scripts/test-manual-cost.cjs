@@ -1,0 +1,44 @@
+require('dotenv').config();process.env.TELEGRAM_ENABLED='false';
+const assert=require('node:assert/strict'),{Client}=require('pg'),database='cond_manual_cost_test_'+Date.now();
+const root=new Client({host:process.env.DB_HOST,port:process.env.DB_PORT,user:process.env.DB_USER,password:process.env.DB_PASSWORD,database:'postgres'});let db,created=false,n=0;
+const check=(value,label)=>{assert.ok(value,label);n++;console.log('PASS '+label);},near=(a,b)=>Math.abs(Number(a)-Number(b))<.001;
+(async()=>{
+ await root.connect();await root.query('CREATE DATABASE "'+database+'"');created=true;delete process.env.DATABASE_URL;
+ Object.assign(process.env,{DB_NAME:database,LOCAL_DEMO:'true',PUBLIC_DEMO:'false',COND_ALLOW_NEGATIVE_STOCK:'true',COND_MANUAL_COST_DEFAULT:'true'});
+ require('../src/app');db=require('../src/database/sequelize');await db.sync();await require('../src/database/seedLocal')();
+ const M=require('../src/models/operations'),{User,Salary}=require('../src/models/models'),ops=require('../src/services/operationsService'),manual=require('../src/services/manualCostService'),edit=require('../src/services/catalogAdminService'),users=await User.findAll(),owner=users.find(u=>u.role==='super_admin').toJSON(),worker=users.find(u=>u.role==='employee').toJSON(),rep=users.find(u=>u.role==='representative').toJSON(),date=require('../src/services/businessDay').today();
+ const film=await ops.material(owner,{name:'Моя плёнка',kind:'film',unit:'м'});await require('../src/services/boxRuleService').save(owner,null,{name:'Моя упаковка',capacityKg:1.5,filmQtyM:.9,filmMaterialId:film.id});
+ const p=await ops.product(owner,{name:'Товар без рецепта',weight:1,priceForEmployee:50,pricePerKg:1000}),pack=(await ops.catalog(owner)).find(x=>x.id===p.id).packs[0];
+ check((await manual.get(p.id)).manualCostEnabled===true&&(await manual.get(p.id)).manualCostPerKg===null,'Default mode enables manual costing without fabricating a zero price');
+ const body={name:p.name,weight:1,priceForEmployee:50,manualCostEnabled:true,manualCostPerKg:'100,5'};await edit.product(owner,p.id,body);
+ const calc=await ops.preview(owner,{productId:p.id,packId:pack.id,boxes:2,workerId:worker.id,date});
+ check(calc.recipeMissing&&calc.costMode==='manual'&&near(calc.kg,3)&&near(calc.materialCost,301.5)&&near(calc.laborCost,150)&&near(calc.totalCost,451.5)&&calc.costComplete,'Manual material/packaging cost scales by kg and adds actual worker pay once');
+ const d=await ops.production(worker,{productId:p.id,packId:pack.id,boxes:2,date});await ops.postProduction(owner,d.id,{expectedCalculation:calc});const snapshot=JSON.stringify((await M.Production.findByPk(d.id)).snapshot);
+ check(near((await M.Material.findByPk(pack.boxMaterialId)).quantity,-2)&&near((await M.Material.findByPk(film.id)).quantity,-1.8),'Manual costing still writes off the actual configured boxes and film');
+ check(near((await M.StockValue.findByPk(p.id)).value,451.5)&&near((await M.StockValue.findByPk(p.id)).knownKg,3)&&near(await Salary.sum('total_amount'),150),'Warehouse valuation and wages use separate correct amounts');
+ await edit.product(owner,p.id,{...body,manualCostPerKg:200});
+ await assert.rejects(()=>edit.product(owner,p.id,{...body,manualCostPerKg:5,expectedManualCostVersion:1}),/Стоимость уже изменена/);check(near((await manual.get(p.id)).manualCostPerKg,200),'An older product form cannot overwrite a newer manual price');
+ check(JSON.stringify((await M.Production.findByPk(d.id)).snapshot)===snapshot&&near((await M.StockValue.findByPk(p.id)).value,451.5),'Changing manual cost never rewrites posted production or warehouse cost');
+ const next=await ops.production(worker,{productId:p.id,packId:pack.id,boxes:2,date});await assert.rejects(()=>ops.postProduction(owner,next.id,{expectedCalculation:calc}),/Расчёт изменился/);check(near((await M.StockValue.findByPk(p.id)).value,451.5),'A stale manual preview cannot conduct a changed cost');await ops.cancelProduction(owner,next.id);
+ const catalog=(await ops.catalog(owner)).find(x=>x.id===p.id),summary=require('../../../front-main/front-main/src/operations/productCostSummary').productCostSummary(catalog,{materials:[],recipes:[]});check(summary.complete&&near(summary.total,375)&&near(summary.costPerKg,250),'Product cost screen uses the same manual base and wage without requiring a recipe');
+ const full=require('../../../front-main/front-main/src/operations/fullCostMetrics').fullCostMetrics({productions:[(await M.Production.findByPk(d.id)).toJSON()],products:[catalog]},date,date,{});check(full.rows[0].complete&&near(full.rows[0].recipeCost,150.5),'Full cost report reconciles the manual base and payroll exactly once');
+ const view=await require('../src/services/auditTrail').snapshot({path:'/products/'+p.id,params:{id:p.id},body:{},user:owner});check(near(view.value.manualCost.manualCostPerKg,200),'Audit snapshots include the manual cost configuration');
+ await assert.rejects(()=>manual.save(worker,p.id,{manualCostPerKg:1}));check(true,'Worker cannot change manual cost');
+ for(const bad of [-1,'x',true,{}])await assert.rejects(()=>edit.product(owner,p.id,{...body,manualCostPerKg:bad}));check(near((await manual.get(p.id)).manualCostPerKg,200),'Invalid manual amounts leave the saved cost unchanged');
+ for(const user of [rep,worker]){const row=(await ops.catalog(user)).find(x=>x.id===p.id);check(row.manualCostPerKg===undefined&&row.packs.every(pack=>pack.costPerBox===undefined),'Private costing is absent from '+user.role+' API data');}
+ const raw=await ops.material(owner,{name:'Сырьё рецепта',unit:'кг'});await ops.receipt(owner,{supplier:'Мой поставщик',date,lines:[{materialId:raw.id,quantity:10,unitCost:10}]});await ops.recipe(owner,{productId:p.id,outputKg:1,overhead:7,priceForEmployee:50,lines:[{materialId:raw.id,quantity:1}],expectedVersion:0});
+ await edit.product(owner,p.id,{...body,manualCostEnabled:false,manualCostPerKg:200});const recipe=await ops.preview(owner,{productId:p.id,kg:3,workerId:worker.id,date});check(recipe.costMode==='recipe'&&near(recipe.totalCost,201)&&recipe.lines.length===1,'Switching off manual mode restores the recipe, labor and overhead calculation');
+ check(JSON.stringify((await M.Production.findByPk(d.id)).snapshot)===snapshot,'Adding a recipe preserves earlier manual production');
+ const blank=await ops.product(owner,{name:'Без цены',weight:1,priceForEmployee:50}),unknown=await ops.preview(owner,{productId:blank.id,kg:1,workerId:worker.id,date});check(unknown.costComplete===false&&near(unknown.totalCost,50),'An empty manual cost retains unknown materials and only known worker pay');
+ const legacy=require('../../../front-main/front-main/src/operations/productCostSummary').productCostSummary({manualCostEnabled:true,manualCostPerKg:100,packKg:.5,packLaborPerPack:20,priceForEmployee:999},{recipes:[],materials:[]});check(near(legacy.total,140),'Legacy pack labor is converted to kg correctly in manual costing');
+ const result=await require('../src/services/reconciliationService')(owner);check(result.ok,'Material, production, wage and valuation journals reconcile: '+JSON.stringify(result.issues));
+ const sync=require('../src/services/syncService'),S=require('../src/models/sync');await sync.initialise();
+ await manual.save(owner,p.id,{manualCostPerKg:201});check(await S.Change.count({where:{sentAt:null}})>0,'Changing manual cost queues a business-data synchronization');
+ let received;const receiver=require('http').createServer((req,res)=>{let body='';req.on('data',b=>body+=b);req.on('end',()=>{const data=JSON.parse(body);received=data.payload;res.setHeader('content-type','application/json');res.end(JSON.stringify({sourceId:data.sourceId,version:data.version,checksum:data.checksum}));});});
+ await new Promise(resolve=>receiver.listen(0,'127.0.0.1',resolve));
+ try{Object.assign(process.env,{SYNC_ROLE:'local',SYNC_CLOUD_URL:'http://127.0.0.1:'+receiver.address().port,SYNC_ALLOW_LOCAL_HTTP:'true',SYNC_SHARED_KEY:'isolated-manual-cost-test-only'});await sync.sendAll(owner);}finally{await new Promise(resolve=>receiver.close(resolve));}
+ check(received.manualCostDefault===true&&received.LegacyLink.some(l=>l.id==='product-manual-cost:'+p.id&&l.data.manualCostPerKg===201),'Server copies contain explicit manual prices and source default mode');
+ await S.Replica.upsert({key:'primary',payload:received,receivedAt:new Date()});const copy=await sync.dashboard(owner);
+ check(copy.products.find(x=>x.id===p.id).manualCostPerKg===201&&copy.products.find(x=>x.id===p.id).manualCostEnabled===false&&copy.products.find(x=>x.id===blank.id).manualCostEnabled===true,'Read-only server view preserves explicit recipe mode and default manual mode');
+ console.log(n+' manual cost checks passed');
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(db)await db.close();if(created)await root.query('DROP DATABASE "'+database+'" WITH (FORCE)');await root.end();});

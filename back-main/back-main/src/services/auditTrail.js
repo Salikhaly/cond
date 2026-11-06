@@ -10,6 +10,7 @@ async function snapshot(req,result){
  if(type==='work-days'&&!id&&typeof req.body?.date==='string'&&Number(req.user.role==='super_admin'?req.body?.userId:req.user.id)>0){require('./businessDay').date(req.body.date);const row=await M.WorkDay.findOne({where:{userId:req.user.role==='super_admin'?Number(req.body.userId):req.user.id,date:req.body.date}});value=row?.toJSON()||null;}
  if(type==='work-profiles'&&id){const person=await User.findByPk(id,{attributes:['name']});value={...(value||{}),name:person?.name||''};if(value.photo){value.photoHash=createHash('sha256').update(value.photo).digest('hex');delete value.photo;}}
  if(type==='products'&&value){
+  value.manualCost=await require('./manualCostService').get(id);
   const display=await M.ProductDisplay.findByPk(id);value.display=display?{description:display.description,photoHash:createHash('sha256').update(display.photo||'').digest('hex')}:null;
  }
  // Authentication records, password hashes and tokens never enter before/after snapshots.

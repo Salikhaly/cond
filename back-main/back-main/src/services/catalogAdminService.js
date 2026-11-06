@@ -22,6 +22,7 @@ module.exports={
    return p.update({is_active:b.active},{transaction:t});
   }
   if(!p.is_active)throw ApiError.badRequest('Сначала восстановите товар из архива');
+  await require('./manualCostService').save(user,p.id,b,t);
   const weight=number(b.weight),rate=number(b.priceForEmployee,true),previousRate=Number(p.priceForEmployee);
   const pricePerKg = b.pricePerKg!==undefined
    ? (b.pricePerKg===''||b.pricePerKg===null?null:number(b.pricePerKg,true))

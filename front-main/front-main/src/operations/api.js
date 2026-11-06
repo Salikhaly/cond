@@ -74,6 +74,7 @@ export async function request(path, body, method, operationId, sendingQueue=fals
 }
 async function offlineCalculation(body) {
     const d = await cached('/operations/dashboard'), recipe = d.recipes?.find(r => Number(r.productId) === Number(body.productId)), product = d.products.find(p => Number(p.id) === Number(body.productId));
+    if(product?.manualCostEnabled)throw new Error('Для проверки ручной себестоимости подключитесь к серверу. Сам выпуск можно записать без сети');
     const kg = Number(body.kg);
     if (!recipe || !product || !(kg > 0)) throw new Error('Для расчёта на телефоне сначала загрузите рецептуру с сервера');
     const policy=(d.workPolicies||[]).filter(p=>p.userId===Number(body.workerId)&&p.startsOn<=(body.date||today())).sort((a,b)=>b.startsOn.localeCompare(a.startsOn))[0];
