@@ -37,8 +37,8 @@ async function calculation(b,t){
     }
     if(b.mode==='shipments'){basis=money(sales-returned);source=saleSource;}
     if(b.mode==='margin'){
-        const events=await M.CostEvent.findAll({where:{kind:{[Op.in]:['shipment','return-accepted']}},transaction:t}),costs=[];
-        for(const o of periodOrders)for(const l of o.lines){const e=events.find(e=>e.id===`shipment:${o.id}:${l.productId}`);if(!e||Number(e.kg)-Number(e.knownKg)>.00011)throw ApiError.badRequest('Неизвестна себестоимость отгрузки. Процент от маржи пока не рассчитан');costs.push({id:e.id,value:Number(e.value)});}
+        const events=await M.CostEvent.findAll({where:{kind:{[Op.in]:['shipment','return-accepted','negative-stock-cover']}},transaction:t}),costs=[];
+        for(const o of periodOrders)for(const l of o.lines){const e=require('../domain/shipmentCost').shipmentCost(events.find(e=>e.id===`shipment:${o.id}:${l.productId}`),events);if(!e||Number(e.kg)-Number(e.knownKg)>.00011)throw ApiError.badRequest('Неизвестна себестоимость отгрузки. Процент от маржи пока не рассчитан');costs.push({id:e.id,value:Number(e.value)});}
         for(const r of returns)for(const l of r.lines){const e=events.find(e=>e.id===`return:${r.id}:${l.productId}`);if(!e||Number(e.kg)-Number(e.knownKg)>.00011)throw ApiError.badRequest('Неизвестна себестоимость возврата. Процент от маржи пока не рассчитан');costs.push({id:e.id,value:-Number(e.value)});}
         basis=money(sales-returned-costs.reduce((s,c)=>s+c.value,0));source={...saleSource,costs:costs.sort((a,b)=>a.id.localeCompare(b.id))};
     }

@@ -8,6 +8,7 @@ const bcrypt = require('bcrypt');
 const { randomUUID } = require('crypto');
 const bridge = require('./legacyBridge');
 const {selectFilm}=require('../domain/filmSelection');
+const {allowNegative}=require('./stockPolicy');
 async function selectedFilmId(pack){
     if(pack.filmMaterialId&&!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(pack.filmMaterialId))throw ApiError.badRequest('Выберите плёнку со склада');
     const film=selectFilm(pack,await M.Material.findAll({where:{kind:'film',active:true}}));
@@ -65,7 +66,7 @@ async function catalog(user) {
         }
         const s = stocks.find(s => s.productId === p.id);
         const display=displays.find(d=>d.productId===p.id);
-        const common = {stockVerified:p.additional?.stockVerified!==false||stockCounts.some(c=>c.lines.some(l=>l.kind==='product'&&Number(l.itemId)===p.id)), packKg,packs:packView(p),salePrice:sellingPrices.find(x=>x.productId===p.id)?.price ?? null,id: p.id, name: p.name, weight: p.weight, photo:'',hasPhoto:Boolean(display?.hasPhoto),photoVersion:Number(display?.photoVersion||0),photoUrl:display?.hasPhoto?'/api/operations/products/'+p.id+'/photo?v='+Number(display.photoVersion||0):'',catalogGroup:display?.catalogGroup||'',catalogVisible:display?.catalogVisible===true,sortOrder:Number(display?.sortOrder||0), description:display?.description || '', image:p.image || '', availableKg: round(Number(s.kg) - Number(s.reservedKg)) };
+        const common = {allowNegativeStock:allowNegative(),stockVerified:p.additional?.stockVerified!==false||stockCounts.some(c=>c.lines.some(l=>l.kind==='product'&&Number(l.itemId)===p.id)), packKg,packs:packView(p),salePrice:sellingPrices.find(x=>x.productId===p.id)?.price ?? null,id: p.id, name: p.name, weight: p.weight, photo:'',hasPhoto:Boolean(display?.hasPhoto),photoVersion:Number(display?.photoVersion||0),photoUrl:display?.hasPhoto?'/api/operations/products/'+p.id+'/photo?v='+Number(display.photoVersion||0):'',catalogGroup:display?.catalogGroup||'',catalogVisible:display?.catalogVisible===true,sortOrder:Number(display?.sortOrder||0), description:display?.description || '', image:p.image || '', availableKg: round(Number(s.kg) - Number(s.reservedKg)) };
         if (user.role === 'representative') return common;
         return { ...common,wageRateLocked:used.some(x=>x.productId===p.id), packLaborPerPack:variants.find(v=>v.productId===p.id)?.laborPerPack??null,kg: s.kg, reservedKg: s.reservedKg, priceForEmployee: p.priceForEmployee };
     });
@@ -126,7 +127,7 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
     const productionValue=productionPrice==null?null:money(productionPrice*(pack?boxes:totalKg));
     if(policy?.mode==='monthly'&&Number(policy.percent)>0&&productionValue==null)throw ApiError.badRequest('Укажите продажную цену товара: от неё считается процент работника');
 
-    return { productId: product.id, productName: product.name, kg: totalKg, boxes, packId: pack?.id||null, capacityKg: pack?Number(pack.capacityKg):null, recipeVersion: recipe.version, productionPrice, productionValue, productionPriceUnit:pack?'box':'kg', costComplete, workMode:policy?.mode||'piece',ratePerKg:piece?reportedRate:0, lines, packagingLines, materialCost, packagingCost, laborCost, overheadCost, totalCost, costPerKg: round(totalCost / totalKg), costPerBox: boxes?round(totalCost/boxes):null, enough: [...lines,...packagingLines].every(l => l.enough) };
+    return { productId: product.id, productName: product.name, kg: totalKg, boxes, packId: pack?.id||null, capacityKg: pack?Number(pack.capacityKg):null, recipeVersion: recipe.version, productionPrice, productionValue, productionPriceUnit:pack?'box':'kg', costComplete, workMode:policy?.mode||'piece',ratePerKg:piece?reportedRate:0, lines, packagingLines, materialCost, packagingCost, laborCost, overheadCost, totalCost, costPerKg: round(totalCost / totalKg), costPerBox: boxes?round(totalCost/boxes):null, allowNegativeStock:allowNegative(), enough: [...lines,...packagingLines].every(l => l.enough) };
 }
 
 module.exports = {
@@ -208,7 +209,7 @@ module.exports = {
                 m.costComplete=Number(m.quantity)<=.00001||priorKnown.has(String(m.id));
                 if(m.active===false)throw ApiError.badRequest('Сначала восстановите материал из архива');
                 const total = Number(m.quantity) + l.quantity;
-                m.unitCost = round((Number(m.quantity) * Number(m.unitCost) + l.lineTotal) / total);
+                m.unitCost = Number(m.quantity)<=0 ? round(l.lineTotal/l.quantity) : round((Number(m.quantity) * Number(m.unitCost) + l.lineTotal) / total);
                 m.quantity = total;
                 await m.save({ transaction: t });
                 await M.Receipt.create({ ...l, supplier, document, date: receiptDate }, { transaction: t });
@@ -453,7 +454,7 @@ module.exports = {
                 const same = expected && !Array.isArray(expected) && fields.every(k => Number(expected[k]) === Number(calc[k])) && (expected.costComplete===undefined||expected.costComplete===calc.costComplete) && (expected.productionValue===undefined||expected.productionValue===calc.productionValue) && Array.isArray(expected.lines) && expected.lines.length === calc.lines.length && calc.lines.every(l => expected.lines.some(x => x && x.materialId === l.materialId && Number(x.quantity) === Number(l.quantity) && Number(x.unitCost) === Number(l.unitCost)));
                 if (!same) throw new ApiError(409, 'Расчёт изменился. Закройте калькуляцию и нажмите «Проверить выпуск» заново');
             }
-            if (!calc.enough) throw ApiError.badRequest('Недостаточно материалов: ' + [...calc.lines,...(calc.packagingLines||[])].filter(l => !l.enough).map(l => l.name).join(', '));
+            if (!calc.enough && !allowNegative()) throw ApiError.badRequest('Недостаточно материалов: ' + [...calc.lines,...(calc.packagingLines||[])].filter(l => !l.enough).map(l => l.name).join(', '));
             for (const l of [...calc.lines, ...(calc.packagingLines || [])]) await M.Material.decrement('quantity', { by: l.quantity, where: { id: l.materialId }, transaction: t });
             const [stock] = await M.Stock.findOrCreate({ where: { productId: p.productId }, defaults: { kg: product.weightTotal }, transaction: t });
             await stock.reload({transaction:t,lock:t.LOCK.UPDATE});
@@ -476,6 +477,11 @@ module.exports = {
             await product.update({ priceTotal: money(calc.costPerKg) }, { transaction: t });
             await bridge.production(p,t);
             await require('./dailyPayService').recompute(p.workerId,p.date,user,t);
+            const covered=await M.CostEvent.findAll({where:{kind:'negative-stock-cover',id:{[Op.like]:'cover:production:'+p.id+':%'}},transaction:t});
+            if(covered.length){
+                const orders=await M.Order.findAll({where:{id:covered.map(e=>e.orderId)},transaction:t});
+                for(const day of new Set(orders.map(o=>require('./businessDay').day(o.shippedAt))))await require('./dailyPayService').forDate(day,user,t);
+            }
             return p;
         });
     },
@@ -543,11 +549,11 @@ module.exports = {
                 const lines = o.lines.map((l, i) => ({ ...l, price: money(num(b.prices[i], l.packId ? 'цена за коробку' : 'цена за кг', true)) }));
                 for(const line of [...lines].sort((a,b)=>a.productId-b.productId)) {
                     const stock=required(await M.Stock.findByPk(line.productId,{transaction:t,lock:t.LOCK.UPDATE}),'Остаток');
-                    if(Number(stock.kg)-Number(stock.reservedKg)<line.kg)throw ApiError.badRequest('Не хватает готовой продукции для согласования. Сначала подтвердите выпуск');
+                    if(!allowNegative()&&Number(stock.kg)-Number(stock.reservedKg)<line.kg)throw ApiError.badRequest('Не хватает готовой продукции для согласования. Сначала подтвердите выпуск');
                     await stock.increment('reservedKg',{by:line.kg,transaction:t});
                     if(line.packId) {
                         const [packStock]=await M.PackStock.findOrCreate({where:{packId:line.packId},defaults:{boxes:0,reservedBoxes:0},transaction:t});
-                        if(Number(packStock.boxes)-Number(packStock.reservedBoxes)<Number(line.boxes))throw ApiError.badRequest('Не хватает коробок для согласования');
+                        if(!allowNegative()&&Number(packStock.boxes)-Number(packStock.reservedBoxes)<Number(line.boxes))throw ApiError.badRequest('Не хватает коробок для согласования');
                         await packStock.increment('reservedBoxes',{by:Number(line.boxes),transaction:t});
                     }
                 }
@@ -558,8 +564,8 @@ module.exports = {
                 for (const l of [...shippedLines].sort((a, b) => a.productId - b.productId)) {
                     const product = required(await Product.findByPk(l.productId, { transaction: t, lock: t.LOCK.UPDATE }), 'Товар');
                     const stock = required(await M.Stock.findByPk(l.productId, { transaction: t, lock: t.LOCK.UPDATE }), 'Остаток');
-                    if (Number(stock.reservedKg) < l.kg || (b.status === 'shipped' && Number(stock.kg) < l.kg)) throw ApiError.badRequest('Остатки изменились. Проверьте склад');
-                    if(b.status==='shipped'&&l.packId)await require('./legacyShipmentService').assertShape(l.productId,stock,t);
+                    if (Number(stock.reservedKg) < l.kg || (b.status === 'shipped' && !allowNegative() && Number(stock.kg) < l.kg)) throw ApiError.badRequest('Остатки изменились. Проверьте склад');
+                    if(b.status==='shipped'&&l.packId&&!allowNegative())await require('./legacyShipmentService').assertShape(l.productId,stock,t);
                     await stock.decrement('reservedKg', { by: l.kg, transaction: t });
                     if (l.packId) {
                         const packStock=required(await M.PackStock.findOne({where:{packId:l.packId},transaction:t,lock:t.LOCK.UPDATE}),'Остаток коробок');

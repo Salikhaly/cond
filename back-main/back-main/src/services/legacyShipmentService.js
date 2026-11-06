@@ -8,7 +8,7 @@ async function load(productId,stock,t){
 async function assertShape(productId,stock,t){const {product}=await load(productId,stock,t);try{physicalShape(product);}catch(e){throw ApiError.badRequest(e.message);}}
 async function consume(line,picks,stock,t,options={}){
  const {product,stocks}=await load(line.productId,stock,t);
- let plan;try{plan=legacyShipmentPlan(line,product,picks,options);}catch(e){throw ApiError.badRequest(e.message);}
+ let plan;try{plan=legacyShipmentPlan(line,product,picks,{...options,allowNegative:require('./stockPolicy').allowNegative()});}catch(e){throw ApiError.badRequest(e.message);}
  if(plan.requiresUnpack)throw ApiError.badRequest('Подтвердите вскрытие коробки: оставшийся вес останется на складе без коробки');
  if(!plan.complete)throw ApiError.badRequest('Укажите коробки для отгрузки. Без коробок доступно '+plan.looseKg+' кг');
  for(const row of plan.picks)await stocks.find(s=>s.packId===row.packId).decrement('boxes',{by:row.boxes,transaction:t});

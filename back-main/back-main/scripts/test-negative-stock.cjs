@@ -1,0 +1,47 @@
+require('dotenv').config();process.env.TELEGRAM_ENABLED='false';
+const assert=require('node:assert/strict'),{Client}=require('pg'),database='cond_negative_test_'+Date.now();
+const root=new Client({host:process.env.DB_HOST,port:process.env.DB_PORT,user:process.env.DB_USER,password:process.env.DB_PASSWORD,database:'postgres'});let db,created=false,n=0;
+const check=(v,label)=>{assert.ok(v,label);n++;console.log('PASS '+label);},near=(a,b)=>Math.abs(Number(a)-Number(b))<.001;
+(async()=>{
+ await root.connect();await root.query('CREATE DATABASE "'+database+'"');created=true;delete process.env.DATABASE_URL;
+ Object.assign(process.env,{DB_NAME:database,LOCAL_DEMO:'true',PUBLIC_DEMO:'false',SYNC_AUTO:'false',COND_ALLOW_NEGATIVE_STOCK:'true'});
+ require('../src/app');db=require('../src/database/sequelize');await db.sync();await require('../src/database/seedLocal')();
+ const M=require('../src/models/operations'),{User,Salary}=require('../src/models/models'),ops=require('../src/services/operationsService'),rules=require('../src/services/boxRuleService'),users=await User.findAll(),owner=users.find(u=>u.role==='super_admin').toJSON(),worker=users.find(u=>u.role==='employee').toJSON(),date=require('../src/services/businessDay').today();
+ const film=await ops.material(owner,{name:'Моя плёнка',kind:'film',unit:'м'}),rule=await rules.save(owner,null,{name:'Моя коробка',capacityKg:1,filmQtyM:.9,filmMaterialId:film.id});
+ const p=await ops.product(owner,{name:'Товар с разрешённым минусом',weight:1,priceForEmployee:50,pricePerKg:1000}),raw=await ops.material(owner,{name:'Сырьё для минуса',unit:'кг'});
+ await ops.recipe(owner,{productId:p.id,outputKg:1,overhead:0,priceForEmployee:50,lines:[{materialId:raw.id,quantity:1}],expectedVersion:0});
+ const pack=(await ops.catalog(owner)).find(x=>x.id===p.id).packs.find(x=>x.boxMaterialId===rule.boxMaterialId);
+ const order=async(boxes)=>{const o=await ops.order(owner,{company:'Магазин · минус',deliveryDate:date,lines:[{productId:p.id,packId:pack.id,boxes}]});await ops.orderStatus(owner,o.id,{status:'approved',prices:[1000]});return o;};
+ const a=await order(2),b=await order(1);await ops.orderStatus(owner,a.id,{status:'shipped'});await ops.orderStatus(owner,b.id,{status:'shipped'});
+ check(near((await M.Stock.findByPk(p.id)).kg,-3)&&near((await M.PackStock.findByPk(pack.id)).boxes,-3),'Two shipments create exact negative finished kg and boxes');
+ await assert.rejects(()=>ops.orderStatus(owner,a.id,{status:'shipped'}));check(near((await M.Stock.findByPk(p.id)).kg,-3),'Repeated shipment cannot spend stock twice');
+ const emptyValue=await M.StockValue.findByPk(p.id);check(near(emptyValue.value,0)&&near(emptyValue.knownKg,0),'Missing stock has unknown cost, not invented profit');
+ const output=async(boxes)=>{const d=await ops.production(worker,{productId:p.id,packId:pack.id,boxes,date});const calc=await ops.preview(owner,{productId:p.id,packId:pack.id,boxes});await ops.postProduction(owner,d.id);return {d,calc};};
+ const first=await output(1);
+ check(near((await M.Stock.findByPk(p.id)).kg,-2)&&near((await M.Material.findByPk(raw.id)).quantity,-1)&&near((await M.Material.findByPk(rule.boxMaterialId)).quantity,-1)&&near((await M.Material.findByPk(film.id)).quantity,-.9),'Production closes finished deficit and writes raw, box and film deficits');
+ check(near((await M.CostEvent.findByPk('production:'+first.d.id)).value,50),'Production keeps its original labor cost snapshot');
+ // Equal replenishment must not divide by zero; covering only part must not create negative prices.
+ await ops.receipt(owner,{supplier:'Поставщик минуса',date,lines:[{materialId:raw.id,quantity:1,unitCost:10},{materialId:rule.boxMaterialId,quantity:1,unitCost:20},{materialId:film.id,quantity:.4,unitCost:10}]});
+ check(near((await M.Material.findByPk(raw.id)).quantity,0)&&near((await M.Material.findByPk(raw.id)).unitCost,10)&&near((await M.Material.findByPk(film.id)).quantity,-.5)&&near((await M.Material.findByPk(film.id)).unitCost,10),'Receipts at zero and still below zero keep finite purchase prices');
+ await ops.receipt(owner,{supplier:'Поставщик минуса',date,lines:[{materialId:raw.id,quantity:10,unitCost:10},{materialId:rule.boxMaterialId,quantity:10,unitCost:20},{materialId:film.id,quantity:10,unitCost:10}]});
+ await output(4);
+ const value=await M.StockValue.findByPk(p.id);check(near(value.kg,2)&&near(value.knownKg,2)&&near(value.value,178),'Replenished finished warehouse contains only two remaining boxes at 89 each');
+ const covers=await M.CostEvent.findAll({where:{productId:p.id,kind:'negative-stock-cover'}});check(near(covers.reduce((s,e)=>s+Number(e.kg),0),3)&&near(covers.reduce((s,e)=>s+Number(e.value),0),228),'Later production costs cover the three earlier shipments once in FIFO order');
+ const {marginMetrics}=require('../../../front-main/front-main/src/operations/marginMetrics');
+ const incomes=(await require('../src/models/models').Income.findAll({where:{productId:p.id},raw:true})).map(i=>({...i,orderId:Number(i.totalWeight)===2?a.id:b.id}));
+ const margin=marginMetrics({incomes,costEvents:await M.CostEvent.findAll({raw:true}),products:[{id:p.id,name:p.name}]});check(near(margin.knownCost,228)&&near(margin.unknownKg,1)&&margin.complete===false,'Reports include late known costs and retain the first unpriced kilogram as unknown');
+ const cancel=await order(10);await ops.orderStatus(owner,cancel.id,{status:'cancelled'});check(near((await M.Stock.findByPk(p.id)).reservedKg,0)&&near((await M.PackStock.findByPk(pack.id)).reservedBoxes,0),'Cancelling a shortage reservation clears exact reserves');
+ const p2=await ops.product(owner,{name:'Возврат в отрицательный склад',weight:1,priceForEmployee:50,pricePerKg:1000});await ops.recipe(owner,{productId:p2.id,outputKg:1,overhead:0,priceForEmployee:50,lines:[{materialId:raw.id,quantity:1}],expectedVersion:0});
+ const pack2=(await ops.catalog(owner)).find(x=>x.id===p2.id).packs[0],o2=await ops.order(owner,{company:'Возврат · минус',deliveryDate:date,lines:[{productId:p2.id,packId:pack2.id,boxes:4}]});await ops.orderStatus(owner,o2.id,{status:'approved',prices:[1000]});await ops.orderStatus(owner,o2.id,{status:'shipped'});
+ const returns=require('../src/services/returnsService'),r=await returns.create(owner,{orderId:o2.id,contactName:'Клиент',reason:'Проверка возврата',preferredSettlement:'credit',lines:[{productId:p2.id,kg:1}],replacements:[]});await returns.post(owner,r.id,{received:true,decisions:[{productId:p2.id,kind:'sale'}]});
+ check(near((await M.Stock.findByPk(p2.id)).kg,-3),'Returned saleable goods can partially close a still-negative warehouse');
+ const d2=await ops.production(worker,{productId:p2.id,packId:pack2.id,boxes:4,date});await ops.postProduction(owner,d2.id);check(near((await M.StockValue.findByPk(p2.id)).value,89),'Return plus later production leaves exactly one valued kilogram');
+ const p3=await ops.product(owner,{name:'Килограммы и ревизия в минус',weight:1,priceForEmployee:0,pricePerKg:1000}),o3=await ops.order(owner,{company:'Кг · минус',deliveryDate:date,lines:[{productId:p3.id,kg:2}]});await ops.orderStatus(owner,o3.id,{status:'approved',prices:[1000]});await ops.orderStatus(owner,o3.id,{status:'shipped'});
+ check(near((await M.Stock.findByPk(p3.id)).kg,-2),'Legacy kilogram shipment can go below zero without fabricated boxes');
+ const counts=require('../src/services/stockCountService'),count=await counts.create(owner,{date,lines:[{kind:'product',itemId:p3.id,actualQty:0,surplusCost:77}]});await counts.post(owner,count.id,{confirmed:true,expectedUpdatedAt:count.updatedAt.toISOString()});
+ check(near((await M.StockValue.findByPk(p3.id)).kg,0)&&near((await M.StockValue.findByPk(p3.id)).value,0),'Physical stocktake to zero closes a deficit without leaving warehouse value');
+ const cover3=await M.CostEvent.findOne({where:{orderId:o3.id,kind:'negative-stock-cover'}});check(near(cover3.value,154)&&near(cover3.knownKg,2),'Explicit stocktake cost values the early shipment separately');
+ const result=await require('../src/services/reconciliationService')(owner);check(result.ok===true||result.reconciled===true,'All quantities, cost journals, payroll and reservations reconcile: '+JSON.stringify(result.issues||[]));
+ console.log(n+' negative stock checks passed');
+
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(db)await db.close();if(created)await root.query('DROP DATABASE "'+database+'" WITH (FORCE)');await root.end();});

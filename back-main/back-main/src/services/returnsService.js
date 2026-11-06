@@ -114,7 +114,7 @@ async function changeStock(productId, kg, t) {
     lock: t.LOCK.UPDATE
   }), 'Остаток');
   const next = round(Number(stock.kg) + kg);
-  if (next < Number(stock.reservedKg) - .00001) fail('Не хватает свободного товара: ' + p.name);
+  if (!require('./stockPolicy').allowNegative() && next < Number(stock.reservedKg) - .00001) fail('Не хватает свободного товара: ' + p.name);
   await stock.update({
     kg: next
   }, {

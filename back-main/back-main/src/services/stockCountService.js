@@ -78,7 +78,7 @@ async function post(u,id,b,outer){
    }else{
     const numericCost=Number(current.row.unitCost),cost=delta>0?(l.surplusCost!=null?Number(l.surplusCost):current.unitCost==null?0:numericCost):numericCost;
     assessment={costDelta:round(delta*cost),costComplete:delta===0||delta>0&&l.surplusCost!=null||current.unitCost!=null};
-    const unitCost=delta>0&&actual>0?round((current.bookQty*numericCost+delta*cost)/actual):numericCost;
+    const unitCost=delta>0&&current.bookQty<=0?cost:delta>0&&actual>0?round((current.bookQty*numericCost+delta*cost)/actual):numericCost;
     const costComplete=delta>0?(current.bookQty<=.00001||current.unitCost!=null)&&(l.surplusCost!=null||current.unitCost!=null):current.unitCost!=null;
     await current.row.update({quantity:actual,unitCost,costComplete},{transaction:t});
    }

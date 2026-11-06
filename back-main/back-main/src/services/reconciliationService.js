@@ -2,6 +2,7 @@ const db = require('../database/sequelize');
 const { Product, ReportProducts, Advance, Salary, Income } = require('../models/models');
 const M = require('../models/operations');
 const ApiError = require('../exceptions/ApiError');
+const {allowNegative}=require('./stockPolicy');
 module.exports = async user => {
     if (user.role !== 'super_admin') throw ApiError.forbiddenRequest();
     return db.transaction({ isolationLevel: 'REPEATABLE READ' }, async t => {
@@ -10,18 +11,23 @@ module.exports = async user => {
         const issues = [], close = (a, b, tolerance = 0.00011) => Math.abs(Number(a) - Number(b)) <= tolerance;
         const values=await read(M.StockValue),costEvents=await read(M.CostEvent),stockCounts=await read(M.StockCount);
         for(const v of values){
-            const stock=stocks.find(s=>s.productId===v.productId),events=costEvents.filter(e=>e.productId===v.productId&&['opening','production','shipment','return-sale','inventory-in','inventory-out'].includes(e.kind));
-            if(!stock||!close(stock.kg,v.kg)||Number(v.knownKg)>Number(v.kg)+.00011||Number(v.knownKg)<0||Number(v.value)<0)issues.push('Стоимость готового склада: нарушен остаток '+v.productId);
-            for(const field of ['kg','knownKg','value']){const total=events.reduce((sum,e)=>sum+(['shipment','inventory-out'].includes(e.kind)?-1:1)*Number(e[field]),0);if(!close(total,v[field],.0011))issues.push('Стоимость готового склада: журнал не совпадает с '+field+' '+v.productId);}
+            const stock=stocks.find(s=>s.productId===v.productId),events=costEvents.filter(e=>e.productId===v.productId&&['opening','production','shipment','return-sale','inventory-in','inventory-out','negative-stock-cover'].includes(e.kind));
+            if(!stock||!close(stock.kg,v.kg)||Number(v.knownKg)>Math.max(0,Number(v.kg))+.00011||Number(v.knownKg)<0||Number(v.value)<0)issues.push('Стоимость готового склада: нарушен остаток '+v.productId);
+            for(const field of ['kg','knownKg','value']){const total=events.reduce((sum,e)=>sum+(e.kind==='negative-stock-cover'&&field==='kg'?0:(['shipment','inventory-out','negative-stock-cover'].includes(e.kind)?-1:1)*Number(e[field])),0);if(!close(total,v[field],.0011))issues.push('Стоимость готового склада: журнал не совпадает с '+field+' '+v.productId);}
         }
         for(const e of costEvents){
             if(Number(e.value)<0||Number(e.knownKg)<0||Number(e.knownKg)>Number(e.kg)+.00011)issues.push('Некорректная сохранённая стоимость '+e.id);
+            if(e.kind==='negative-stock-debt'){
+                const source=costEvents.find(c=>c.kind==='shipment'&&c.orderId===e.orderId&&c.productId===e.productId),covers=costEvents.filter(c=>c.kind==='negative-stock-cover'&&c.orderId===e.orderId&&c.productId===e.productId);
+                if(!source||Number(e.kg)>Number(source.kg)+.00011||covers.reduce((s,c)=>s+Number(c.kg),0)>Number(e.kg)+.00011)issues.push('Не согласована оценка ранней отгрузки '+e.id);
+            }
+            if(e.kind==='negative-stock-cover'&&!costEvents.some(d=>d.kind==='negative-stock-debt'&&d.orderId===e.orderId&&d.productId===e.productId))issues.push('Нет ранней отгрузки для оценки '+e.id);
             if(e.kind==='shipment'){const order=orders.find(o=>o.id===e.orderId),lines=order?.lines.filter(l=>l.productId===e.productId)||[];if(!lines.length||order.status!=='shipped'||!close(lines.reduce((s,l)=>s+Number(l.kg),0),e.kg))issues.push('Стоимость не совпадает с отгрузкой '+e.id);}
             if(e.kind==='production'){const p=productions.find(p=>'production:'+p.id===e.id);if(!p||p.status!=='posted'||!close(p.totalCost,e.value)||!close(p.kg,e.kg))issues.push('Стоимость не совпадает с выпуском '+e.id);}
         }
         const packDefinitions=await read(M.ProductPack),packStocks=await read(M.PackStock);
-        for(const stock of stocks){const packs=packDefinitions.filter(p=>p.productId===stock.productId),boxed=packs.reduce((sum,p)=>sum+Number(packStocks.find(s=>s.packId===p.id)?.boxes||0)*Number(p.capacityKg),0);if(boxed>Number(stock.kg)+.00011)issues.push('Товар '+(products.find(p=>p.id===stock.productId)?.name||stock.productId)+': вес коробок '+boxed+' кг больше общего остатка '+Number(stock.kg)+' кг — пересчитайте коробки и вес');}
-        for(const pack of packStocks)if(Number(pack.boxes)<0||Number(pack.reservedBoxes)<0||Number(pack.reservedBoxes)>Number(pack.boxes)+.00011)issues.push('Коробки: проверьте остаток и резерв '+pack.packId);
+        for(const stock of stocks){const packs=packDefinitions.filter(p=>p.productId===stock.productId),boxed=packs.reduce((sum,p)=>sum+Number(packStocks.find(s=>s.packId===p.id)?.boxes||0)*Number(p.capacityKg),0);if(!allowNegative()&&boxed>Number(stock.kg)+.00011)issues.push('Товар '+(products.find(p=>p.id===stock.productId)?.name||stock.productId)+': вес коробок '+boxed+' кг больше общего остатка '+Number(stock.kg)+' кг — пересчитайте коробки и вес');}
+        for(const pack of packStocks)if(Number(pack.reservedBoxes)<0||!allowNegative()&&(Number(pack.boxes)<0||Number(pack.reservedBoxes)>Number(pack.boxes)+.00011))issues.push('Коробки: проверьте остаток и резерв '+pack.packId);
         const receiptCorrections=await read(M.ReceiptCorrection);
         for (const m of materials) {
             const incoming = receipts.filter(r => r.materialId === m.id).reduce((s, r) => s + Number(r.quantity), 0);
@@ -35,7 +41,7 @@ module.exports = async user => {
             const reserve = orders.filter(o => o.status==='approved').reduce((sum, o) => sum + o.lines.filter(l => l.productId === s.productId).reduce((n, l) => n + Number(l.kg), 0), 0);
             if (!product || !close(product.weightTotal, s.kg)) issues.push(`Товар №${s.productId}: вес в старом и новом складе различается`);
             if (!close(s.reservedKg, reserve)) issues.push(`Товар №${s.productId}: резерв не совпадает с заявками`);
-            if (Number(s.kg) < 0 || Number(s.reservedKg) < 0 || Number(s.reservedKg) > Number(s.kg)) issues.push(`Товар №${s.productId}: некорректный остаток или резерв`);
+            if (Number(s.reservedKg) < 0 || !allowNegative()&&(Number(s.kg) < 0 || Number(s.reservedKg) > Number(s.kg))) issues.push(`Товар №${s.productId}: некорректный остаток или резерв`);
             if (product && Number(product.quantity) !== Math.floor((Number(s.kg) + 1e-8) / Number(product.weight))) issues.push(`Товар №${s.productId}: число полных коробок не соответствует весу`);
         }
         const returns=await read(M.GoodsReturn),dispositions=await read(M.ReturnDisposition),settlements=await read(M.ReturnSettlement),uses=await read(M.CreditUse);

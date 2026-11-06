@@ -19,7 +19,7 @@ async function backfill(transaction){
  const key='schema:material-cost-quality:v1';if(await M.LegacyLink.findByPk(key,{transaction}))return;
  const history=await require('./receiptCorrectionService').history(transaction),candidates=new Set(history.counts.filter(c=>c.status==='posted').flatMap(c=>c.lines.filter(l=>l.kind==='material'&&(l.unitCost==null||l.costComplete===false||Number(l.delta)>0&&l.surplusCost==null&&Number(l.unitCost)===0)).map(l=>l.itemId))),changes=[];
  for(const id of candidates){const material=await M.Material.findByPk(id,{transaction,lock:transaction.LOCK.UPDATE});if(!material||material.costComplete!=null)continue;
-  let complete=false,reason='history-incomplete';try{const value=require('../domain/receiptCorrectionMath').replay(require('./receiptCorrectionService').events(history,id));if(Math.abs(value.quantity-Number(material.quantity))<.00011&&Math.abs(value.unitCost-Number(material.unitCost))<.001){complete=value.costComplete;reason=complete?'valued-after-empty':'unvalued-balance';}}catch{}
+  let complete=false,reason='history-incomplete';try{const value=require('../domain/receiptCorrectionMath').replay(require('./receiptCorrectionService').events(history,id),{allowNegative:require('./stockPolicy').allowNegative()});if(Math.abs(value.quantity-Number(material.quantity))<.00011&&Math.abs(value.unitCost-Number(material.unitCost))<.001){complete=value.costComplete;reason=complete?'valued-after-empty':'unvalued-balance';}}catch{}
   await material.update({costComplete:complete},{transaction});changes.push({materialId:id,costComplete:complete,reason});
  }
  await M.LegacyLink.create({id:key,data:{changes,at:new Date().toISOString()}},{transaction});

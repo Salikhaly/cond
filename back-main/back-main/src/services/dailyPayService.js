@@ -12,7 +12,8 @@ async function calculation(userId,date,t){
  const ownIds=policy.scope==='assigned'?(await M.Order.findAll({where:{userId},attributes:['id'],transaction:t})).map(o=>o.id):null;
  const returns=await M.GoodsReturn.findAll({where:{status:'posted',postedAt:{[Op.gte]:bounds.start,[Op.lt]:bounds.end},...(ownIds?{orderId:ownIds}:{})},transaction:t});
  const ids=[...orders.flatMap(o=>o.lines.map(l=>`shipment:${o.id}:${l.productId}`)),...returns.flatMap(r=>r.lines.map(l=>`return:${r.id}:${l.productId}`))];
- const events=ids.length?await M.CostEvent.findAll({where:{id:ids},transaction:t}):[];
+ const originals=ids.length?await M.CostEvent.findAll({where:{id:ids},transaction:t}):[],covers=orders.length?await M.CostEvent.findAll({where:{orderId:orders.map(o=>o.id),kind:'negative-stock-cover'},transaction:t}):[];
+ const events=originals.map(e=>require('../domain/shipmentCost').shipmentCost(e,covers));
  const complete=ids.every(id=>{const e=events.find(e=>e.id===id);return e&&Number(e.kg)-Number(e.knownKg)<.00011;});
  const sales=money(orders.reduce((s,o)=>s+Number(o.total),0)-returns.reduce((s,r)=>s+Number(r.total),0)),cogs=money(events.reduce((s,e)=>s+(e.kind==='shipment'?1:-1)*Number(e.value),0));
  const source={policyId:policy.id,mode:policy.mode,scope:policy.scope,shiftRate:Number(policy.shiftRate),percent:Number(policy.percent),fixedDay:Number(policy.fixedDay),attendanceRequired:policy.attendanceRequired,worked,orders:orders.map(o=>({id:o.id,total:Number(o.total)})).sort((a,b)=>a.id.localeCompare(b.id)),returns:returns.map(r=>({id:r.id,total:Number(r.total)})).sort((a,b)=>a.id.localeCompare(b.id)),costs:events.map(e=>({id:e.id,kg:Number(e.kg),knownKg:Number(e.knownKg),value:Number(e.value)})).sort((a,b)=>a.id.localeCompare(b.id))};

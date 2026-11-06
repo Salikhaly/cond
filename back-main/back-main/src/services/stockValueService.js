@@ -3,6 +3,7 @@ const ApiError = require('../exceptions/ApiError');
 const round = n => Math.round((Number(n) + Number.EPSILON) * 10000) / 10000;
 const today = () => new Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Qyzylorda'}).format(new Date());
 const plain = row => row.get ? row.get({plain:true}) : row;
+const {allowNegative}=require('./stockPolicy');
 
 // Call while holding Product then Stock row locks, before changing physical kg.
 async function pool(stock, t) {
@@ -21,7 +22,24 @@ async function movement(stock, amount, incoming, event, t) {
   const row=await pool(stock,t), sign=incoming?1:-1;
   await M.CostEvent.create({...event,productId:stock.productId,...amount,date:event.date||today()},{transaction:t});
   const next={kg:round(Number(row.kg)+sign*amount.kg),knownKg:round(Number(row.knownKg)+sign*amount.knownKg),value:round(Number(row.value)+sign*amount.value)};
-  if(next.kg<-.00001||next.knownKg<-.00011||next.value<-.00011||next.knownKg>next.kg+.00011)throw new ApiError(409,'Не согласована оценка остатка');
+  // Receiving stock after an early shipment values that shipment, not the remaining warehouse.
+  if(incoming&&Number(row.kg)<0){
+    let remaining=round(Math.min(-Number(row.kg),amount.kg)),coveredKg=0,allocatedKnown=0,allocatedValue=0;
+    const debts=await M.CostEvent.findAll({where:{productId:stock.productId,kind:'negative-stock-debt'},order:[['createdAt','ASC'],['id','ASC']],transaction:t});
+    const covers=await M.CostEvent.findAll({where:{productId:stock.productId,kind:'negative-stock-cover'},transaction:t});
+    for(const debt of debts){
+      const used=covers.filter(c=>c.orderId===debt.orderId).reduce((s,c)=>s+Number(c.kg),0);
+      const kg=round(Math.min(remaining,Number(debt.kg)-used));if(kg<=0)continue;
+      coveredKg=round(coveredKg+kg);
+      const knownKg=round(round(amount.knownKg*coveredKg/amount.kg)-allocatedKnown),value=round(round(amount.value*coveredKg/amount.kg)-allocatedValue);
+      allocatedKnown=round(allocatedKnown+knownKg);allocatedValue=round(allocatedValue+value);
+      await M.CostEvent.create({id:`cover:${event.id}:${debt.orderId}`,productId:stock.productId,orderId:debt.orderId,kind:'negative-stock-cover',kg,knownKg,value,date:event.date||today()},{transaction:t});
+      next.knownKg=round(next.knownKg-knownKg);next.value=round(next.value-value);remaining=round(remaining-kg);
+      if(remaining<=0)break;
+    }
+    if(remaining>.00011)throw new ApiError(409,'Не найден документ отгрузки для отрицательного остатка');
+  }
+  if((!allowNegative()&&next.kg<-.00001)||next.knownKg<-.00011||next.value<-.00011||next.knownKg>Math.max(0,next.kg)+.00011)throw new ApiError(409,'Не согласована оценка остатка');
   if(next.kg===0){next.knownKg=0;next.value=0;}
   await row.update(next,{transaction:t});
   return amount;
@@ -31,16 +49,21 @@ async function production(stock,p,calc,t){
 }
 async function shipment(stock,orderId,kg,t){
   const row=await pool(stock,t);
-  return movement(stock,part(row,kg),false,{id:`shipment:${orderId}:${stock.productId}`,kind:'shipment',orderId},t);
+  if(!allowNegative()||kg<=Number(row.kg))return movement(stock,part(row,kg),false,{id:`shipment:${orderId}:${stock.productId}`,kind:'shipment',orderId},t);
+  const available=Math.max(0,Number(row.kg)),valued=available?part(row,available):{knownKg:0,value:0};
+  await M.CostEvent.create({id:`debt:${orderId}:${stock.productId}`,productId:stock.productId,orderId,kind:'negative-stock-debt',kg:round(kg-available),knownKg:0,value:0,date:today()},{transaction:t});
+  return movement(stock,{kg:round(kg),knownKg:valued.knownKg,value:valued.value},false,{id:`shipment:${orderId}:${stock.productId}`,kind:'shipment',orderId},t);
 }
 async function acceptReturn(r,t){
   for(const line of r.lines){
-    const source=await M.CostEvent.findByPk(`shipment:${r.orderId}:${line.productId}`,{transaction:t});
+    const original=await M.CostEvent.findByPk(`shipment:${r.orderId}:${line.productId}`,{transaction:t});
+    const covers=await M.CostEvent.findAll({where:{orderId:r.orderId,productId:line.productId,kind:'negative-stock-cover'},transaction:t});
+    const source=require('../domain/shipmentCost').shipmentCost(original,covers);
     // Never reconstruct old shipment costs from today's recipe or priceTotal.
     const previous=await M.CostEvent.findAll({where:{orderId:r.orderId,productId:line.productId,kind:'return-accepted'},transaction:t});
     const consumed=previous.reduce((s,e)=>({kg:s.kg+Number(e.kg),knownKg:s.knownKg+Number(e.knownKg),value:s.value+Number(e.value)}),{kg:0,knownKg:0,value:0});
-    const cumulative=source?part(source,round(consumed.kg+Number(line.kg))):{knownKg:0,value:0};
-    await M.CostEvent.create({id:`return:${r.id}:${line.productId}`,kind:'return-accepted',returnId:r.id,orderId:r.orderId,productId:line.productId,kg:line.kg,knownKg:round(cumulative.knownKg-consumed.knownKg),value:round(cumulative.value-consumed.value),date:today()},{transaction:t});
+    const cumulative=source?part(source,covers.length?Number(line.kg):round(consumed.kg+Number(line.kg))):{knownKg:0,value:0};
+    await M.CostEvent.create({id:`return:${r.id}:${line.productId}`,kind:'return-accepted',returnId:r.id,orderId:r.orderId,productId:line.productId,kg:line.kg,knownKg:round(cumulative.knownKg-(covers.length?0:consumed.knownKg)),value:round(cumulative.value-(covers.length?0:consumed.value)),date:today()},{transaction:t});
   }
 }
 async function disposition(stock,r,d,t){
