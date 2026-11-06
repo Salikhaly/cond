@@ -371,13 +371,6 @@ module.exports = {
             if (basePerKg != null) await M.SellingPrice.upsert({ productId: p.id, price: money(basePerKg) }, { transaction: t });
             const sharedRules=await M.BoxRule.findAll({transaction:t});
             if(sharedRules.length)await require('./boxRuleService').ensureProduct(p,t,sharedRules);
-            // Reuse the client's packaging. Creating a product must not create materials.
-            for (const box of await M.Material.findAll({where:{kind:'box',active:true},transaction:t})) {
-                const variantCapacity=Number(box.capacityKg);
-                if(!(variantCapacity>0))continue;
-                const [pack] = await M.ProductPack.findOrCreate({ where: { productId: p.id, boxMaterialId: box.id }, defaults: { capacityKg: variantCapacity, filmQtyM, salePrice: basePerKg == null ? null : money(basePerKg * variantCapacity), laborPerBox: money(rate * variantCapacity), overheadPerBox: 0, active: true }, transaction: t });
-                await M.PackStock.findOrCreate({ where: { packId: pack.id }, defaults: { boxes: 0, reservedBoxes: 0 }, transaction: t });
-            }
             if(b.photo!==undefined||b.description!==undefined)await require('./tradeService').display(user,p.id,b);
             return p;
         });
