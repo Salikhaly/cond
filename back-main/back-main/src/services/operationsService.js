@@ -274,20 +274,16 @@ module.exports = {
                 ? Number(first.salePrice) / Number(first.capacityKg)
                 : selling?.price != null ? Number(selling.price) : null;
             let created = 0;
-            for (const capacity of require('./packCatalogService').baseCapacities) {
-                let [box] = await M.Material.findOrCreate({
-                    where: { name: 'Коробка ' + String(capacity).replace('.', ',') + ' кг' },
-                    defaults: { unit: 'шт', kind: 'box', capacityKg: capacity, quantity: 0, unitCost: 0 },
-                    transaction: t,
-                });
-                if (box.kind !== 'box') await box.update({ kind: 'box', capacityKg: capacity, unit: 'шт' }, { transaction: t });
+            for (const box of await M.Material.findAll({where:{kind:'box',active:true},transaction:t})) {
+                const capacity=Number(box.capacityKg);
+                if(!(capacity>0))continue;
                 const exists = existing.some(pack => String(pack.boxMaterialId) === String(box.id));
                 if (exists) continue;
                 const [pack] = await M.ProductPack.findOrCreate({
                     where: { productId: product.id, boxMaterialId: box.id },
                     defaults: {
                         capacityKg: capacity,
-                        filmQtyM: first?.filmQtyM || 0,
+                        filmQtyM: 0,
                         salePrice: pricePerKg == null ? null : money(pricePerKg * capacity),
                         laborPerBox: money(Number(product.priceForEmployee) * capacity),
                         overheadPerBox: 0,
@@ -375,9 +371,10 @@ module.exports = {
             if (basePerKg != null) await M.SellingPrice.upsert({ productId: p.id, price: money(basePerKg) }, { transaction: t });
             const sharedRules=await M.BoxRule.findAll({transaction:t});
             if(sharedRules.length)await require('./boxRuleService').ensureProduct(p,t,sharedRules);
-            for (const variantCapacity of [...new Set([capacity,...require('./packCatalogService').baseCapacities])]) {
-                let [box] = await M.Material.findOrCreate({ where: { name: 'Коробка ' + String(variantCapacity).replace('.', ',') + ' кг' }, defaults: { unit: 'шт', kind: 'box', capacityKg: variantCapacity, quantity: 0, unitCost: 0 }, transaction: t });
-                if (box.kind !== 'box') await box.update({ kind: 'box', capacityKg: variantCapacity, unit: 'шт' }, { transaction: t });
+            // Reuse the client's packaging. Creating a product must not create materials.
+            for (const box of await M.Material.findAll({where:{kind:'box',active:true},transaction:t})) {
+                const variantCapacity=Number(box.capacityKg);
+                if(!(variantCapacity>0))continue;
                 const [pack] = await M.ProductPack.findOrCreate({ where: { productId: p.id, boxMaterialId: box.id }, defaults: { capacityKg: variantCapacity, filmQtyM, salePrice: basePerKg == null ? null : money(basePerKg * variantCapacity), laborPerBox: money(rate * variantCapacity), overheadPerBox: 0, active: true }, transaction: t });
                 await M.PackStock.findOrCreate({ where: { packId: pack.id }, defaults: { boxes: 0, reservedBoxes: 0 }, transaction: t });
             }
