@@ -17,9 +17,7 @@ function ProductEditor({ rules=[], product, onBack, onSaved, run, busy }) {
         name: product.name || '',
         weight: product.weight || '',
         priceForEmployee: product.priceForEmployee ?? 0,
-        pricePerKg: product.packs?.[0]?.capacityKg && product.packs[0].salePrice != null
-            ? Math.round(Number(product.packs[0].salePrice) / Number(product.packs[0].capacityKg) * 100) / 100
-            : product.salePrice ?? '',
+        pricePerKg: product.salePrice ?? '',
         description: product.description || '',
     } : { name: '', weight: 1, priceForEmployee: 0, pricePerKg: '', description: '' });
     const change = (key, value) => setForm(f => ({ ...f, [key]: value }));
@@ -27,7 +25,9 @@ function ProductEditor({ rules=[], product, onBack, onSaved, run, busy }) {
         <form onSubmit={e => {
             e.preventDefault();
             run(async () => {
-                const saved=product?await api('/products/'+product.id,form,'PATCH'):await api('/products',form);
+                const payload={...form};
+                if(product&&(String(form.pricePerKg)===String(product.salePrice??'')||(form.pricePerKg!==''&&product.salePrice!=null&&Number(form.pricePerKg)===Number(product.salePrice))))delete payload.pricePerKg;
+                const saved=product?await api('/products/'+product.id,payload,'PATCH'):await api('/products',payload);
                 onSaved(saved);
             }, product ? 'Товар сохранён' : 'Готовый товар создан');
         }}>

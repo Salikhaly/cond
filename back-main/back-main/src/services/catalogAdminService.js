@@ -33,7 +33,8 @@ module.exports={
   if(variant&&b.packLaborPerPack!==undefined)await variant.update({laborPerPack:number(b.packLaborPerPack,true)},{transaction:t});
   await p.update({name:name(b.name),weight,priceForEmployee:rate,quantity:Math.floor((Number(p.weightTotal)+1e-8)/weight)},{transaction:t});
   if(rate!==previousRate)for(const pack of await M.ProductPack.findAll({where:{productId:p.id},transaction:t}))await pack.update({laborPerBox:Math.round(rate*Number(pack.capacityKg)*100)/100},{transaction:t});
-  if(pricePerKg!==undefined&&pricePerKg!==null){
+  const currentPrice=await M.SellingPrice.findByPk(p.id,{transaction:t});
+  if(pricePerKg!==undefined&&pricePerKg!==null&&(!currentPrice||Number(currentPrice.price)!==Math.round(pricePerKg*100)/100)){
    await M.SellingPrice.upsert({productId:p.id,price:Math.round(pricePerKg*100)/100},{transaction:t});
    const packs=await M.ProductPack.findAll({where:{productId:p.id},transaction:t});
    for(const pack of packs)await pack.update({salePrice:Math.round(pricePerKg*Number(pack.capacityKg)*100)/100},{transaction:t});
