@@ -125,6 +125,10 @@
     color: var(--ds-blue) !important;
 }
 
+.op-app button.ghost.op-wide-action {
+    color: #fff !important;
+}
+
 .op-app button.ghost.danger {
     color: var(--ds-danger) !important;
 }
