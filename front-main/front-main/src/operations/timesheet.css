@@ -256,3 +256,6 @@
         bottom: 4px;
     }
 }
+
+.op-app .op-timesheet-day:disabled{opacity:1;cursor:default}
+.ux-calendar-grid button.sick{background:#e8f3ff;color:#245c92;border-color:#c6dcef}

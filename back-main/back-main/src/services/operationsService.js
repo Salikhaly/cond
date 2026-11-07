@@ -63,7 +63,7 @@ async function catalog(user) {
     return products.map(p => {
         const packKg=variants.find(v=>v.productId===p.id)?.kgPerPack??null;
         if (user.role === 'employee') {
-            const rate=personal?.pieceRates?.find(r=>r.productId===p.id),piece=!personal||['piece','monthly_piece'].includes(personal.mode),pack=variants.find(v=>v.productId===p.id);
+            const rate=personal?.pieceRates?.find(r=>r.productId===p.id),piece=!personal||['piece','monthly_piece','shift_piece'].includes(personal.mode),pack=variants.find(v=>v.productId===p.id);
             const perKg=rate?Number(rate.rate)/(rate.unit==='pack'?Number(packKg):1):profile?.individualRate!=null?Number(profile.individualRate):pack?Number(pack.laborPerPack)/Number(pack.kgPerPack):Number(p.priceForEmployee);
             return {id:p.id,name:p.name,weight:p.weight,packKg,packs:packView(p).map(x=>({...x,costPerBox:undefined,overheadPerBox:undefined,salePrice:undefined,payPerBox:piece?(!rate&&Number(personal?.boxRate)>0?Number(personal.boxRate):rate||profile?.individualRate!=null?round(perKg*x.capacityKg):Number(x.laborPerBox)):null})),wageMode:personal?.mode||'piece',payRateForKg:piece&&(!Number(personal?.boxRate)||rate)?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
         }
@@ -124,7 +124,7 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
     const variant=await M.PackagingVariant.findByPk(product.id,{transaction:tx});
     const policy=workerId?await require('./workPolicyService').at(workerId,workDate||require('./businessDay').today(),tx):null;
     const profile=workerId?await M.WorkProfile.findByPk(workerId,{transaction:tx}):null;
-    const piece=!policy||['piece','monthly_piece'].includes(policy.mode);
+    const piece=!policy||['piece','monthly_piece','shift_piece'].includes(policy.mode);
     const personalRate=policy?.pieceRates?.find(r=>r.productId===product.id);
     const personalPerKg=personalRate?Number(personalRate.rate)/(personalRate.unit==='pack'?Number(variant?.kgPerPack||product.weight):1):null;
     const profileRate=profile?.individualRate!=null?Number(profile.individualRate):null;

@@ -45,7 +45,7 @@ export async function projectDashboard(data) {
     const me=(await readCache(owner()+':/operations/me'))?.value;
     const wageRequests=[...(data.wageRequests||[])],workDays=[...(data.workDays||[])];
     for(const row of pending.filter(r=>r.path==='/operations/wage-requests'&&!r.error))wageRequests.unshift({...row.body,id:row.id,userId:me?.role==='super_admin'?Number(row.body.userId):me?.id,status:'pending_upload',createdBy:me?.id,createdByName:me?.name||'Вы',_pending:true,createdAt:new Date(row.created).toISOString()});
-    for(const row of pending.filter(r=>r.path==='/operations/work-days'&&!r.error)){const userId=me?.role==='super_admin'?Number(row.body.userId):me?.id,index=workDays.findIndex(d=>d.userId===userId&&d.date===row.body.date),value={...row.body,id:row.id,userId,status:'reported',_pending:true};if(index>=0)workDays[index]={...workDays[index],...value};else workDays.push(value);}
+    for(const row of pending.filter(r=>r.path==='/operations/work-days'&&!r.error)){const userId=me?.role==='super_admin'?Number(row.body.userId):me?.id,index=workDays.findIndex(d=>d.userId===userId&&d.date===row.body.date),value={...row.body,id:row.id,userId,status:row.body.status&&row.body.status!=='worked'?'reported_'+row.body.status:'reported',_pending:true};if(index>=0)workDays[index]={...workDays[index],...value};else workDays.push(value);}
     data={...data,workDays,wageRequests:wageRequests.map(r=>({...r,_replyPending:pending.some(q=>!q.error&&q.path==='/operations/wage-requests/'+r.id+'/reply'),_posting:pending.some(q=>!q.error&&q.path==='/operations/wage-requests/'+r.id+'/post')}))};
     const orders=[...(data.orders||[])];
     for(const row of pending.filter(r=>r.path==='/operations/orders'&&!r.error)){

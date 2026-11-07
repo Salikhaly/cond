@@ -1,101 +1,27 @@
-import React, { useMemo, useState } from 'react';
-import { api, moneyFmt } from './api';
-import { Field } from './Fields';
+import React,{useMemo,useState,useEffect} from 'react';
+import {api,moneyFmt,today} from './api';
+import {Field} from './Fields';
+import {calendarMetrics} from './workCalendarMetrics';
+import {attendance,pending,labels,statuses} from '../../../../back-main/back-main/src/domain/workAttendance';
 import './timesheet.css';
-
-const marks = {
-    worked: { short: 'Я', label: 'Работал' },
-    off: { short: 'В', label: 'Выходной' },
-    vacation: { short: 'О', label: 'Отпуск' },
-    sick: { short: 'Б', label: 'Больничный' },
-    absent: { short: 'Н', label: 'Не вышел' },
-    reported: { short: '?', label: 'На проверке' },
-};
-const reasons = [
-    ['Выходной', 'В'],
-    ['Отпуск', 'О'],
-    ['Больничный', 'Б'],
-    ['Не вышел', 'Н'],
-];
-const reasonMark = comment => {
-    const value = String(comment || '').toLowerCase();
-    if (value.includes('отпуск')) return 'vacation';
-    if (value.includes('больнич')) return 'sick';
-    if (value.includes('не вышел') || value.includes('прогул')) return 'absent';
-    return 'off';
-};
-const monthTitle = month => new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(month + '-01T12:00:00Z'));
-const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-
-export default function Timesheet({ data, person, month, run, busy }) {
-    const [editing, setEditing] = useState(null);
-    const [mark, setMark] = useState('Выходной');
-    const [comment, setComment] = useState('');
-    const rows = useMemo(() => {
-        const [year, monthNumber] = month.split('-').map(Number);
-        const last = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
-        const days = [];
-        for (let number = 1; number <= last; number += 1) {
-            const date = month + '-' + String(number).padStart(2, '0');
-            const workDay = (data.workDays || []).find(row => row.userId === person.id && row.date === date);
-            const productions = (data.productions || []).filter(row => row.workerId === person.id && row.status === 'posted' && row.date === date);
-            const daily = (data.dailyPay || []).find(row => row.userId === person.id && row.date === date);
-            const status = workDay?.status === 'reported' ? 'reported' : workDay?.status === 'worked' || productions.length ? 'worked' : workDay ? reasonMark(workDay.comment) : '';
-            days.push({
-                number,
-                date,
-                weekday: new Date(date + 'T12:00:00Z').getUTCDay(),
-                status,
-                comment: workDay?.comment || '',
-                boxes: productions.reduce((sum, row) => sum + Number(row.boxes || 0), 0),
-                earned: Number(daily?.amount || 0),
-            });
-        }
-        return days;
-    }, [data, person.id, month]);
-    const worked = rows.filter(row => row.status === 'worked').length;
-    const vacation = rows.filter(row => row.status === 'vacation').length;
-    const sick = rows.filter(row => row.status === 'sick').length;
-    const absent = rows.filter(row => row.status === 'absent').length;
-    const boxes = rows.reduce((sum, row) => sum + row.boxes, 0);
-    const earned = rows.reduce((sum, row) => sum + row.earned, 0);
-    const offset = rows.length ? (rows[0].weekday + 6) % 7 : 0;
-    const open = row => {
-        if (busy || row.boxes > 0) return;
-        setEditing(row);
-        setMark(row.status === 'vacation' ? 'Отпуск' : row.status === 'sick' ? 'Больничный' : row.status === 'absent' ? 'Не вышел' : 'Выходной');
-        setComment(row.comment || '');
-    };
-    const save = () => {
-        if (!editing) return;
-        run(async () => {
-            const workedDay = mark === 'Работал';
-            await api('/work-days', { userId: person.id, date: editing.date, status: workedDay ? 'worked' : 'off', comment: workedDay ? '' : (comment || mark) });
-            setEditing(null);
-        }, 'Отметка в табеле сохранена');
-    };
-    return <section className="op-card">
-        <div className="op-section-heading"><div><span className="op-eyebrow">ТАБЕЛЬ</span><h2>{monthTitle(month)}</h2><p className="op-muted">{person.name}</p></div><span className="op-badge posted">{worked} раб. дней</span></div>
-        <div className="op-timesheet-summary">
-            <div><span>Работал</span><b>{worked}</b></div>
-            <div><span>Отпуск</span><b>{vacation}</b></div>
-            <div><span>Больничный</span><b>{sick}</b></div>
-            <div className={absent ? 'bad' : ''}><span>Не вышел</span><b>{absent}</b></div>
-            <div><span>Коробок</span><b>{boxes}</b></div>
-            <div><span>Начислено</span><b>{moneyFmt(earned)} ₸</b></div>
-        </div>
-        <div className="op-timesheet-calendar">
-            {weekdays.map(day => <div key={day} className="op-timesheet-weekday">{day}</div>)}
-            {Array.from({ length: offset }).map((_, index) => <div key={'empty-' + index} className="op-timesheet-day empty" />)}
-            {rows.map(row => <button key={row.date} type="button" className={'op-timesheet-day ' + (row.status || 'unmarked')} disabled={busy || row.boxes > 0} onClick={() => open(row)} title={row.date + (row.comment ? ' · ' + row.comment : '')}>
-                <span className="op-timesheet-number">{row.number}</span>
-                {row.status && <b className="op-timesheet-letter">{marks[row.status]?.short}</b>}
-                {row.boxes > 0 && <small>{row.boxes}</small>}
-            </button>)}
-        </div>
-        <div className="op-timesheet-legend">{[['worked', 'Я работал'], ['off', 'В выходной'], ['vacation', 'О отпуск'], ['sick', 'Б больничный'], ['absent', 'Н не вышел'], ['reported', '? на проверке']].map(([status, label]) => <span key={status}><i className={'op-timesheet-dot ' + status} />{label}</span>)}</div>
-        {rows.some(row => row.comment) && <div className="op-timesheet-comments">{rows.filter(row => row.comment).map(row => <span key={row.date}>{row.number}: {row.comment}</span>)}</div>}
-        {editing && <div className="op-review-panel"><h3>Отметка на {editing.number} {monthTitle(month)}</h3><Field label="Что поставить"><select value={mark} onChange={e => setMark(e.target.value)}>{person.role === 'representative' && <option value="Работал">Я · Работал</option>}{reasons.map(([value, short]) => <option key={value} value={value}>{short} · {value}</option>)}</select></Field><Field label="Комментарий"><input maxLength={250} value={comment} onChange={e => setComment(e.target.value)} placeholder="Например: отпуск с 5 по 12" /></Field>{person.role === 'employee' && <p className="op-muted">Рабочий день производства подтверждается проведённым выпуском. Здесь отмечают выходной, отпуск, больничный или невыход.</p>}<div className="op-actions"><button disabled={busy} onClick={save}>Сохранить отметку</button><button className="secondary" onClick={() => setEditing(null)}>Отмена</button></div></div>}
-        <p className="op-muted">Нажми на день, чтобы поставить отметку. Выходные, отпуск и больничный не считаются рабочими днями.</p>
-    </section>;
+const short={worked:'Я',off:'В',sick:'Б',vacation:'О',absent:'Н',reported:'?'};
+const title=month=>new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T12:00:00Z'));
+export default function Timesheet({data,person,month,user,run,busy,initialDate}){
+ const m=useMemo(()=>calendarMetrics(data,person.id,month),[data,person.id,month]);
+ const admin=user?.role==='super_admin'&&data.permissions?.payroll!==false,own=user?.id===person.id;
+ const [editing,setEditing]=useState(null),[mark,setMark]=useState('worked'),[comment,setComment]=useState(''),[amount,setAmount]=useState('');
+ const rows=m.days.map(d=>({...d,status:d.productions.length?'worked':pending(d.work)||d.work?._pending?'reported':attendance(d.work)||''}));
+ const canOpen=d=>!busy&&d.date<=today()&&(admin||own&&d.date===today()&&(!d.work||pending(d.work)));
+ const open=d=>{if(!canOpen(d))return;const kind=attendance(d.work)||'worked';setEditing(d);setMark(kind);setComment(d.work?.comment||'');setAmount(d.work?.dailyAmount??(kind==='worked'?d.policy?.shiftRate??'':0));};
+ useEffect(()=>{const day=rows.find(d=>d.date===initialDate);if(day)open(day);},[initialDate]);
+ const perDay=['shift','shift_piece'].includes(editing?.policy?.mode);
+ const save=()=>{if(!editing)return;run(async()=>{await api('/work-days',{userId:person.id,date:editing.date,status:mark,comment,...(admin&&perDay?{dailyAmount:amount}:{})});setEditing(null);},admin?'Отметка и сумма сохранены':'Отметка отправлена администратору');};
+ return <section className="op-card">
+ <div className="op-section-heading"><div><span className="op-eyebrow">ТАБЕЛЬ</span><h2>{title(month)}</h2><p className="op-muted">{person.name}</p></div><span className="op-badge posted">{m.worked} раб. дней</span></div>
+ <div className="op-timesheet-summary"><div><span>Работал</span><b>{m.worked}</b></div><div><span>Больничный</span><b>{rows.filter(d=>d.attendance==='sick'&&!d.pending).length}</b></div><div><span>Отпуск</span><b>{rows.filter(d=>d.attendance==='vacation'&&!d.pending).length}</b></div><div><span>Начислено</span><b>{moneyFmt(m.recorded)} ₸</b></div></div>
+ <div className="op-timesheet-calendar">{['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(d=><div key={d} className="op-timesheet-weekday">{d}</div>)}{Array.from({length:m.offset},(_,i)=><div key={'empty'+i} className="op-timesheet-day empty"/>)}{rows.map(d=><button key={d.date} type="button" className={'op-timesheet-day '+(d.status||'unmarked')} disabled={!canOpen(d)} onClick={()=>open(d)} aria-label={d.date+' · '+(labels[d.status]||(d.status==='reported'?'На проверке':'Нет отметки'))+' · '+moneyFmt(d.earned)+' тенге'}><span className="op-timesheet-number">{d.number}</span>{d.status&&<b className="op-timesheet-letter">{short[d.status]}</b>}{d.earned!==0&&<small>{new Intl.NumberFormat('ru-RU',{notation:'compact',maximumFractionDigits:1}).format(d.earned)}</small>}</button>)}</div>
+ <div className="op-timesheet-legend">{[...statuses,'reported'].map(s=><span key={s}><i className={'op-timesheet-dot '+s}/>{short[s]} · {labels[s]||'На проверке'}</span>)}</div>
+ {editing&&<div className="op-review-panel"><h3>{editing.number} · {title(month)}</h3><Field label="Отметка дня"><select value={mark} onChange={e=>{setMark(e.target.value);setAmount(e.target.value==='worked'?editing.policy?.shiftRate??'':0);}}>{statuses.map(s=><option key={s} value={s} disabled={editing.productions.length>0&&s!=='worked'}>{labels[s]}</option>)}</select></Field>{admin&&perDay&&<Field label="Начислить за день, ₸" type="number" min="0" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} placeholder={mark==='worked'?String(editing.policy.shiftRate):'0'}/>}<Field label="Комментарий · необязательно" maxLength={250} value={comment} onChange={e=>setComment(e.target.value)}/>{!admin&&<p className="op-field-hint">Отметку и сумму подтвердит администратор.</p>}{admin&&!perDay&&<p className="op-field-hint">Отметка не меняет оплату за выпуск или месячный оклад. Для дневной суммы выберите «За день / смену» в условиях оплаты.</p>}{admin&&perDay&&mark==='sick'&&<p className="op-field-hint">Укажите сумму за больничный или оставьте 0.</p>}<div className="op-actions"><button disabled={busy} onClick={save}>{admin?'Сохранить':'Отправить отметку'}</button><button className="secondary" onClick={()=>setEditing(null)}>Отмена</button></div></div>}
+ <p className="op-field-hint">Нажмите на день. Суммы показывают подтверждённые начисления.</p>
+ </section>;
 }

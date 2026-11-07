@@ -13,6 +13,7 @@ async function snapshot(req,result){
   value.manualCost=await require('./manualCostService').get(id);
   const display=await M.ProductDisplay.findByPk(id);value.display=display?{description:display.description,photoHash:createHash('sha256').update(display.photo||'').digest('hex')}:null;
  }
+ if(type==='work-days'&&value)value.dailyAmount=(await M.LegacyLink.findByPk('work-day-pay:'+value.id))?.data?.amount??null;
  // Authentication records, password hashes and tokens never enter before/after snapshots.
  return {type,id:id==null?'':String(id),value};
 }

@@ -1,12 +1,15 @@
 const db=require('../database/sequelize'),M=require('../models/operations'),{User}=require('../models/models'),{Op}=require('sequelize'),{createHash}=require('crypto'),ApiError=require('../exceptions/ApiError'),D=require('./businessDay');
+const A=require('../domain/workAttendance');
 const money=n=>Math.round((Number(n)+Number.EPSILON)*100)/100,hash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 async function calculation(userId,date,t){
  const policy=await require('./workPolicyService').at(userId,date,t);if(!policy||['piece','custom','monthly','monthly_piece'].includes(policy.mode))return null;
- const work=await M.WorkDay.findOne({where:{userId,date},transaction:t}),productions=await M.Production.findAll({where:{workerId:userId,date,status:'posted'},attributes:['id'],transaction:t}),person=await User.findByPk(userId,{attributes:['role'],transaction:t}),worked=productions.length>0||person?.role!=='employee'&&work?.status==='worked';
- if(policy.mode==='shift'){
-  const source={policyId:policy.id,mode:'shift',worked,shiftRate:Number(policy.shiftRate)},sourceFingerprint=hash(source),daily=await M.DailyPay.findOne({where:{userId,date},transaction:t});
-  const override=daily?.override?.sourceFingerprint===sourceFingerprint&&daily.override.kind==='amount'?daily.override:null,total=override?Number(override.amount):worked?Number(policy.shiftRate):0;
-  return {userId,date,policyId:policy.id,mode:'shift',worked,known:true,basis:worked?1:0,percent:0,shiftRate:Number(policy.shiftRate),fixedDay:0,knownPart:total,total,source,sourceFingerprint,fingerprint:hash({sourceFingerprint,total,override}),activity:worked};
+ const work=await M.WorkDay.findOne({where:{userId,date},transaction:t}),productions=await M.Production.findAll({where:{workerId:userId,date,status:'posted'},attributes:['id'],transaction:t}),person=await User.findByPk(userId,{attributes:['role'],transaction:t}),worked=productions.length>0||work?.status==='worked';
+ if(['shift','shift_piece'].includes(policy.mode)){
+  const specified=work&&!A.pending(work)?(await M.LegacyLink.findByPk('work-day-pay:'+work.id,{transaction:t}))?.data?.amount:null;
+  const attendance=A.attendance(work),base=specified!=null?Number(specified):worked?Number(policy.shiftRate):0;
+  const source={policyId:policy.id,mode:policy.mode,worked,attendance,dayAmount:specified??null,shiftRate:Number(policy.shiftRate)},sourceFingerprint=hash(source),daily=await M.DailyPay.findOne({where:{userId,date},transaction:t});
+  const override=daily?.override?.sourceFingerprint===sourceFingerprint&&daily.override.kind==='amount'?daily.override:null,total=override?Number(override.amount):base;
+  return {userId,date,policyId:policy.id,mode:policy.mode,worked,known:true,basis:worked?1:0,percent:0,shiftRate:Number(policy.shiftRate),fixedDay:0,knownPart:total,total,source,sourceFingerprint,fingerprint:hash({sourceFingerprint,total,override}),activity:worked||!!work&&!A.pending(work)};
  }
  const bounds=D.bounds(date),orders=await M.Order.findAll({where:{status:'shipped',shippedAt:{[Op.gte]:bounds.start,[Op.lt]:bounds.end},...(policy.scope==='assigned'?{userId}:{})},transaction:t});
  const ownIds=policy.scope==='assigned'?(await M.Order.findAll({where:{userId},attributes:['id'],transaction:t})).map(o=>o.id):null;
@@ -76,24 +79,40 @@ async function keepRecognized(r,u,t){
  await daily.update({override:{kind:'amount',amount:Number(daily.amount),sourceFingerprint:calc.sourceFingerprint,requestId:r.id,actorId:u.id,actorName:u.name}},{transaction:t});const kept=await calculation(daily.userId,daily.date,t);return apply(daily,{...kept,approvalRequestId:r.id},Number(daily.amount),'posted',u,t);
 }
 async function workDay(u,b){
- const admin=u.role==='super_admin',userId=admin?Number(b.userId):u.id,date=D.date(b.date);if(!admin&&!['employee','representative'].includes(u.role))throw ApiError.forbiddenRequest();if(!admin&&date!==D.today())throw ApiError.badRequest('Прошлый день исправляется запросом на согласование');
+ const admin=u.role==='super_admin',userId=admin?Number(b.userId):u.id,date=D.date(b.date),status=b.status||'worked';
+ if(!admin&&!['employee','representative'].includes(u.role))throw ApiError.forbiddenRequest();
+ if(!A.statuses.includes(status))throw ApiError.badRequest('Выберите отметку дня');
+ if(!admin&&b.dailyAmount!==undefined)throw ApiError.forbiddenRequest('Сумму за день подтверждает администратор');
+ if(!admin&&date!==D.today())throw ApiError.badRequest('Прошлый день исправляется запросом на согласование');
  return db.transaction(async t=>{
-  const person=await User.findByPk(userId,{transaction:t,lock:t.LOCK.UPDATE});if(!person||!['employee','representative'].includes(person.role))throw ApiError.badRequest('Выберите сотрудника');if(date>D.today())throw ApiError.badRequest('Будущий день пока не отработан');
-  if(person.role==='employee'&&(!admin||b.status!=='off'))throw ApiError.badRequest('Рабочий день производства подтверждается проведённым актом выработки. Отдельная отметка не нужна');
-  if(b.status==='off'&&await M.Production.findOne({where:{workerId:userId,date,status:'posted'},transaction:t}))throw ApiError.badRequest('Проведённый акт подтверждает работу за день');
-  if(b.status==='off'&&(typeof b.comment!=='string'||!b.comment.trim()))throw ApiError.badRequest('Укажите причину: выходной, отпуск, больничный или не вышел');
+  const person=await User.findByPk(userId,{transaction:t,lock:t.LOCK.UPDATE});if(!person||!['employee','representative'].includes(person.role))throw ApiError.badRequest('Выберите сотрудника');
+  if(date>D.today())throw ApiError.badRequest('Будущий день пока не отработан');
+  const acts=await M.Production.count({where:{workerId:userId,date,status:'posted'},transaction:t});
+  if(status!=='worked'&&acts)throw ApiError.badRequest('За день есть проведённый выпуск. Отметьте рабочий день');
   if(admin)await require('./wageRequestService').rights(u,'policy',t);
   let row=await M.WorkDay.findOne({where:{userId,date},transaction:t,lock:t.LOCK.UPDATE});
-  if(row&&row.status!=='reported'&&!admin)throw ApiError.badRequest('Подтверждённый день исправляется через согласование');
-  const status=admin?(b.status==='off'?'off':'worked'):'reported',values={userId,date,status,comment:String(b.comment||'').slice(0,250),actorId:row?.actorId||u.id,actorName:row?.actorName||u.name,...(admin?{confirmedBy:u.id,confirmedName:u.name}:{})};
-  if(row)await row.update(values,{transaction:t});else row=await M.WorkDay.create(values,{transaction:t});if(admin)await recompute(userId,date,u,t);return row;
+  if(row&&!A.pending(row)&&!admin)throw ApiError.badRequest('Подтверждённый день исправляется через согласование');
+  const policy=await require('./workPolicyService').at(userId,date,t);
+  let amount;
+  if(admin&&b.dailyAmount!==undefined){
+   if(!['shift','shift_piece'].includes(policy?.mode))throw ApiError.badRequest('Сумма за день доступна при оплате за смену. Измените условия оплаты');
+   const raw=typeof b.dailyAmount==='string'?b.dailyAmount.trim().replace(',','.'):b.dailyAmount;amount=raw===''||raw===null?null:require('./workPolicyService').amount(raw,'сумму за день');
+  }
+  if(admin&&amount===undefined&&row&&A.attendance(row)!==status)amount=null;
+  const values={userId,date,status:admin?status:status==='worked'?'reported':'reported_'+status,comment:String(b.comment||'').slice(0,250),actorId:row?.actorId||u.id,actorName:row?.actorName||u.name,...(admin?{confirmedBy:u.id,confirmedName:u.name}:{})};
+  if(row)await row.update(values,{transaction:t});else row=await M.WorkDay.create(values,{transaction:t});
+  if(amount!==undefined)await M.LegacyLink.upsert({id:'work-day-pay:'+row.id,data:{amount,actorId:u.id}},{transaction:t});
+  if(admin)await recompute(userId,date,u,t);
+  return {...row.toJSON(),dailyAmount:amount??null};
  });
 }
 async function visible(u,t){
  const where=u.role==='super_admin'?{}:{userId:u.id},workPolicies=await M.WorkPolicy.findAll({where,order:[['startsOn','DESC']],transaction:t}),workDays=await M.WorkDay.findAll({where,transaction:t}),raw=await M.DailyPay.findAll({where,transaction:t}),wageAdjustments=await M.WageAdjustment.findAll({where,transaction:t}),workProfiles=await M.WorkProfile.findAll({where,transaction:t});
+ const dayAmounts=await M.LegacyLink.findAll({where:{id:workDays.map(d=>'work-day-pay:'+d.id)},transaction:t});
+ const visibleDays=workDays.map(d=>({...d.toJSON(),dailyAmount:dayAmounts.find(a=>a.id==='work-day-pay:'+d.id)?.data?.amount??null}));
  const dailyPay=raw.map(p=>{const row=p.toJSON();if(u.role!=='super_admin'&&row.snapshot){const {source,...safe}=row.snapshot;row.snapshot=safe;}return row;});
  const safeProfiles=u.role==='super_admin'?workProfiles:workProfiles.map(profile=>{const row=profile.get({plain:true});const {parents,...safe}=row;return safe;});
- return {workPolicies,workDays,dailyPay,wageAdjustments,workProfiles:safeProfiles};
+ return {workPolicies,workDays:visibleDays,dailyPay,wageAdjustments,workProfiles:safeProfiles};
 }
 async function profile(u,id,b){
  await require('./wageRequestService').rights(u,'policy');return db.transaction(async t=>{
