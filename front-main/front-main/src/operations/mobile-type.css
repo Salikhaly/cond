@@ -1,64 +1,64 @@
 /* Phone typography: readable labels, generous controls, natural text scaling. */
 @media screen and (max-width: 780px) {
-  .op-app.studio-app { font-size: 17px; line-height: 1.5; }
+  .op-app.studio-app { font-size: 19px; line-height: 1.5; }
   .op-app.studio-app :is(p,li,td,.op-empty,.op-muted,.op-plan-context,.op-alert,.op-missing) {
-    font-size: 16px; line-height: 1.5;
+    font-size: 18px; line-height: 1.5;
   }
-  .op-app.studio-app :is(h1,.op-topbar h1) { font-size: 22px; line-height: 1.25; }
-  .op-app.studio-app h2 { font-size: 24px; line-height: 1.25; letter-spacing: -.4px; }
-  .op-app.studio-app h3 { font-size: 19px; line-height: 1.35; }
+  .op-app.studio-app :is(h1,.op-topbar h1) { font-size: 24px; line-height: 1.25; }
+  .op-app.studio-app h2 { font-size: 28px; line-height: 1.25; letter-spacing: -.4px; }
+  .op-app.studio-app h3 { font-size: 21px; line-height: 1.35; }
   .op-app.studio-app :is(small,.op-field-hint,.op-cell-detail,.op-eyebrow,.studio-date,.op-badge) {
-    font-size: 14px; line-height: 1.45;
+    font-size: 16px; line-height: 1.45;
   }
   .op-app.studio-app :is(.op-field>span,.op-check,.cond-account-picker .op-field-hint) {
-    font-size: 16px; line-height: 1.4;
+    font-size: 18px; line-height: 1.4;
   }
   .op-app.studio-app :is(input,select,textarea) {
-    font-size: 18px !important; line-height: 1.4; min-height: 52px;
+    font-size: 20px !important; line-height: 1.4; min-height: 56px;
   }
   .op-app.studio-app :is(input[type=checkbox],input[type=radio]) { min-height: 20px; }
   .op-app.studio-app :is(button,summary,.op-report-tabs button,.op-period-pills button) {
-    font-size: 16px !important; line-height: 1.35; min-height: 46px;
+    font-size: 18px !important; line-height: 1.35; min-height: 50px;
   }
   .op-app.studio-app :is(.cond-article-grid button,.cond-account-options button,.cond-payment-modes button,.cond-form-footer button) {
-    font-size: 16px; min-height: 52px;
+    font-size: 18px; min-height: 52px;
   }
   .op-app.studio-app .cond-form-footer { gap: 10px; flex-wrap: wrap; }
-  .op-app.studio-app .cond-form-footer>span { font-size: 14px; overflow-wrap: anywhere; }
+  .op-app.studio-app .cond-form-footer>span { font-size: 16px; overflow-wrap: anywhere; }
   .op-app.studio-app :is(.op-costs b,.op-costs strong,.op-person-due,.ux-order-summary strong) {
-    font-size: 20px; line-height: 1.3; font-variant-numeric: tabular-nums;
+    font-size: 22px; line-height: 1.3; font-variant-numeric: tabular-nums;
   }
-  .op-app.studio-app :is(.op-stats strong,.op-owner-tile strong) { font-size: 26px; line-height: 1.2; }
+  .op-app.studio-app :is(.op-stats strong,.op-owner-tile strong) { font-size: 30px; line-height: 1.2; }
   .op-app.studio-app :is(.op-costs>span,.op-costs>strong,.op-section-heading) { flex-wrap: wrap; gap: 8px; }
   .op-app.studio-app :is(.op-field,.op-section-heading>div,.op-costs>*) { min-width: 0; }
-  .op-app.studio-app .op-mobile-cards td:before { font-size: 14px; line-height: 1.4; }
-  .op-app.studio-app th { font-size: 14px; }
-  .op-app.studio-app .op-mobilenav button { font-size: 13px !important; line-height: 1.25; min-height: 62px; }
-  .op-app.studio-app .op-mobile-dock button { font-size: 14px !important; }
+  .op-app.studio-app .op-mobile-cards td:before { font-size: 16px; line-height: 1.4; }
+  .op-app.studio-app th { font-size: 16px; }
+  .op-app.studio-app .op-mobilenav button { font-size: 14px !important; line-height: 1.25; min-height: 68px; white-space: normal; overflow-wrap: anywhere; }
+  .op-app.studio-app .op-mobile-dock button { font-size: 16px !important; }
   /* Seven calendar columns must still fit a narrow phone. */
-  .op-app.studio-app :is(.ux-calendar-week,.op-timesheet-weekday,.op-timesheet-number) { font-size: 13px; }
+  .op-app.studio-app :is(.ux-calendar-week,.op-timesheet-weekday,.op-timesheet-number) { font-size: 14px; }
   .op-app.studio-app :is(.ux-calendar-grid>button,.op-timesheet-day) { min-height: 58px; padding: 5px 2px; }
-  .op-app.studio-app :is(.ux-calendar-grid>button small,.op-timesheet-day small) { font-size: 11px; }
-  .op-login :is(.op-field>span,p) { font-size: 16px; line-height: 1.5; }
-  .op-login :is(input,button) { font-size: 18px; min-height: 52px; }
+  .op-app.studio-app :is(.ux-calendar-grid>button small,.op-timesheet-day small) { font-size: 12px; }
+  .op-login :is(.op-field>span,p) { font-size: 18px; line-height: 1.5; }
+  .op-login :is(input,button) { font-size: 20px; min-height: 52px; }
 }
 
 @media screen and (max-width: 780px) {
   .op-app.studio-app .op-content .op-field > :is(input,select,textarea) {
-    font-size: 18px !important; min-height: 52px !important;
+    font-size: 20px !important; min-height: 52px !important;
   }
   .op-app.studio-app .op-content .op-field > input.op-amount-input {
-    font-size: 36px !important; min-height: 80px !important;
+    font-size: 40px !important; min-height: 80px !important;
   }
   .op-app.studio-app .op-quick-expense .cond-article-grid {
     grid-template-columns: repeat(2,minmax(0,1fr)) !important;
     gap: 10px !important;
   }
   .op-app.studio-app .op-quick-expense .cond-article-grid button {
-    min-height: 84px !important; padding: 12px 10px !important;
-    font-size: 16px !important; line-height: 1.4 !important; gap: 10px !important;
+    min-height: 96px !important; padding: 12px 10px !important;
+    font-size: 18px !important; line-height: 1.4 !important; gap: 10px !important;
   }
-  .op-app.studio-app .cond-article-grid button > span:last-of-type { font-size: 16px !important; }
+  .op-app.studio-app .cond-article-grid button > span:last-of-type { font-size: 18px !important; }
 }
 
-@media screen and (max-width:780px){.op-app.studio-app input.op-amount-input{font-size:36px!important;min-height:80px;}}
+@media screen and (max-width:780px){.op-app.studio-app input.op-amount-input{font-size: 40px!important;min-height:80px;}}
