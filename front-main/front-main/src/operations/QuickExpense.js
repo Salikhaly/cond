@@ -8,7 +8,7 @@ import ArticlePicker from './ArticlePicker';
 import AccountPicker from './AccountPicker';
 function preference(){try{return JSON.parse(localStorage.getItem('cond.expense-account:'+localStorage.getItem('cond-owner')))||{};}catch{return {};}}
 const blank=()=>({amount:'',articleId:'',name:'',kind:'operating',costGroup:'business',category:'',subcategory:'',method:'kaspi',...preference(),date:today(),recipient:'',comment:''});
-export default function QuickExpense({data,run,busy,onBack,initialCostGroup,backLabel='К расходам',onOpen}){
+export default function QuickExpense({data,run,busy,onBack,initialCostGroup,backLabel='Назад к расходам',onOpen}){
  const [form,setForm,stored]=useDraft('quick-expense-v2',blank()),[done,setDone]=useState(null);
  const record=useRecordedAction({name:'expense:new',path:'/expenses',data,run,message:'Расход записан',onSaved:(result,body)=>{try{localStorage.setItem('cond.expense-account:'+localStorage.getItem('cond-owner'),JSON.stringify({accountId:body.accountId,method:body.method}));}catch{}setForm(blank());setDone({result,body});}});
  const set=(key,value)=>setForm(f=>({...f,[key]:value})),select=(a,p)=>setForm(f=>({...f,articleId:a.id,articleVersion:a.updatedAt,name:a.name,category:p?.name||a.name,subcategory:p?a.name:'',kind:a.kind,costGroup:a.costGroup}));

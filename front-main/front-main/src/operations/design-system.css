@@ -129,6 +129,24 @@
     color: #fff !important;
 }
 
+.op-app .studio-expense-flow > button.ghost:first-child {
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    margin: 0 0 14px;
+    padding: 8px 14px;
+    border: 1px solid #cfe3d6;
+    border-radius: 12px;
+    background: #f1f8f4;
+    color: var(--ds-accent) !important;
+    font-weight: 700;
+}
+
+.op-app .studio-expense-flow > button.ghost:first-child:hover {
+    background: #e6f2ea;
+    filter: none;
+}
+
 .op-app button.ghost.danger {
     color: var(--ds-danger) !important;
 }
