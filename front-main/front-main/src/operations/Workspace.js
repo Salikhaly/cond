@@ -183,3 +183,5 @@ import './design-system.css';
 import './ux-refinement.css';
 
 import './owner-mobile.css';
+
+import './mobile-type.css';
