@@ -8,7 +8,7 @@ async function metadata(u,b,t,legacy=false){
  const method=b.method||'unknown';if(!['cash','kaspi','bank',...(legacy?['unknown']:[])].includes(method))throw ApiError.badRequest('Выберите способ оплаты');
  const person=b.responsibleId?await User.findByPk(b.responsibleId,{transaction:t}):null;if(b.responsibleId&&!person)throw ApiError.badRequest('Ответственный не найден');
  const category=text(b.category,'категорию',true),subcategory=text(b.subcategory,'подкатегорию'),costGroup=b.costGroup||(/^(свет|электричество|электроэнергия)$/i.test(subcategory)?'electricity':/^вода$/i.test(subcategory)?'water':'business');
- if(!['electricity','water','business'].includes(costGroup))throw ApiError.badRequest('Укажите вид затрат: свет, вода или другие расходы бизнеса');
+ if(!['electricity','water','business','packaging'].includes(costGroup))throw ApiError.badRequest('Укажите вид затрат: свет, вода или другие расходы бизнеса');
  return {articleId:b.articleId||null,kind:b.kind,category,subcategory,costGroup,method,comment:text(b.comment,'комментарий',false,2000),responsibleId:person?.id||null,responsibleName:person?.name||text(b.responsibleName,'ответственного'),actorId:u.id,actorName:u.name};
 }
 async function create(u,b){
