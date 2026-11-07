@@ -617,8 +617,9 @@ module.exports = {
     async user(user, b) {
         admin(user);
         if (!['employee', 'representative'].includes(b.role)) throw ApiError.badRequest('Неверная роль');
-        const email = text(b.email, 'email').toLowerCase();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof b.password !== 'string' || b.password.length < 10 || b.password.length > 72) throw ApiError.badRequest('Нужны email и пароль от 10 до 72 символов');
+        const email = text(b.email, 'логин').toLowerCase();
+        if (!(email.length<=250&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||/^[\p{L}\p{N}][\p{L}\p{N}._+-]{2,79}$/u.test(email)||/^\+\d{5,20}$/.test(email)) || typeof b.password !== 'string' || b.password.length < 10 || Buffer.byteLength(b.password,'utf8') > 72) throw ApiError.badRequest('Укажите логин от 3 символов без пробелов или email и пароль от 10 символов (до 72 байт)');
+        if(await User.findOne({where:{email}}))throw ApiError.badRequest('Этот логин уже занят');
         const company = b.role === 'representative' && b.company ? text(b.company, 'организацию') : null;
         const password = await bcrypt.hash(b.password, 10);
         return db.transaction(async t => {

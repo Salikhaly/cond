@@ -42,8 +42,8 @@ router.post('/session', wrap(async (req, res) => {
     if (a.until < now) { a.count = 0; a.until = now + 60000; }
     if (++a.count > 20) throw new ApiError(429, 'Слишком много попыток. Подождите минуту');
     attempts.set(key, a);
-    const u = await User.findOne({ where: { email: String(req.body.email || '').toLowerCase() } });
-    if (!u || typeof req.body.password !== 'string' || !await bcrypt.compare(req.body.password, u.password)) throw ApiError.unauthorizedRequest('Неверный email или пароль');
+    const u = await User.findOne({ where: { email: String(req.body.email || '').trim().toLowerCase() } });
+    if (!u || typeof req.body.password !== 'string' || !await bcrypt.compare(req.body.password, u.password)) throw ApiError.unauthorizedRequest('Неверный логин или пароль');
     if ((await require('../models/operations').Access.findByPk(u.id))?.disabled) throw ApiError.forbiddenRequest('Доступ к аккаунту закрыт администратором');
     const tokens = tokenService.generateToken({ ...new UserDto(u) });
     await tokenService.saveToken(u.id, tokens.refreshToken);
