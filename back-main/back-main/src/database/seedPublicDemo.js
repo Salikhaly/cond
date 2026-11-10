@@ -21,8 +21,8 @@ module.exports=async()=>{
   const cookie=await service.product(admin,{name:'Печенье сливочное',weight:2,priceForEmployee:150,salePrice:2000});
   const muffin=await service.product(admin,{name:'Кексы ванильные',weight:1,priceForEmployee:180,salePrice:2200});
   await Product.update({image:'/products/butter-cookies.jpg'},{where:{id:cookie.id}});await Product.update({image:'/products/vanilla-muffins.jpg'},{where:{id:muffin.id}});
-  await M.ProductDisplay.create({productId:cookie.id,description:'Рассыпчатое печенье на сливочном масле. Нежная ваниль и золотистая корочка. Упаковка — 2 кг.'});
-  await M.ProductDisplay.create({productId:muffin.id,description:'Нежные ванильные кексы с мягким мякишем. Для кофеен, магазинов и семейного чаепития. Упаковка — 1 кг.'});
+  await M.ProductDisplay.create({productId:cookie.id,catalogVisible:true,description:'Рассыпчатое печенье на сливочном масле. Нежная ваниль и золотистая корочка. Упаковка — 2 кг.'});
+  await M.ProductDisplay.create({productId:muffin.id,catalogVisible:true,description:'Нежные ванильные кексы с мягким мякишем. Для кофеен, магазинов и семейного чаепития. Упаковка — 1 кг.'});
   await service.recipe(admin,{productId:cookie.id,outputKg:10,priceForEmployee:150,overhead:500,lines:[{materialId:flour.id,quantity:6},{materialId:sugar.id,quantity:2},{materialId:butter.id,quantity:3},{materialId:box.id,quantity:5}]});
   await service.recipe(admin,{productId:muffin.id,outputKg:5,priceForEmployee:180,overhead:300,lines:[{materialId:flour.id,quantity:3},{materialId:sugar.id,quantity:1},{materialId:butter.id,quantity:1},{materialId:box.id,quantity:5}]});
   const second=await service.user(admin,{name:'Данияр · пекарь',email:'baker@demo.test',password:'CondDemo2026!',role:'employee'});
