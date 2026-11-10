@@ -162,9 +162,9 @@ export default function Production({ data, user, run, busy, initialAction, onNav
                 <div className="op-actions">
                     {admin && p.status === 'draft' && !p._posting && <button disabled={busy} onClick={() => check(p)}>Проверить выпуск</button>}
                     {p.status === 'posted' && admin && <button className="secondary" onClick={() => { setPreview(p.snapshot); setPreviewFor(p); }}>Калькуляция</button>}
-                    {p.status === 'draft' && !p._posting && <button className="ghost danger" disabled={busy} onClick={() => setCancelId(p.id)}>Отменить запись</button>}
+                    {(p.status === 'draft'||admin&&p.status==='posted') && !p._posting && <button className="ghost danger" disabled={busy} onClick={() => setCancelId(p.id)}>Отменить запись</button>}
                 </div>
-                {cancelId === p.id && <div className="op-order-confirm"><b>Отменить {productName(p.productId)} · {recordTitle(p)}?</b><p>Склад и зарплата не изменятся.</p><div className="op-actions"><button disabled={busy} onClick={() => run(async () => { await api(`/productions/${p.id}/cancel`, {}); setCancelId(''); }, 'Выработка отменена')}>Подтвердить отмену</button><button className="secondary" disabled={busy} onClick={() => setCancelId('')}>Оставить запись</button></div></div>}
+                {cancelId === p.id && <div className="op-order-confirm"><b>Отменить {productName(p.productId)} · {recordTitle(p)}?</b><p>{p.status==='posted'?'Сырьё, коробки и плёнка вернутся на склад. Начисление за выпуск отменится. При связанных движениях отмена будет заблокирована.':'Склад и зарплата не изменятся.'}</p><div className="op-actions"><button disabled={busy} onClick={() => run(async () => { await api(`/productions/${p.id}/cancel`, {}); setCancelId(''); }, 'Выработка отменена')}>Подтвердить отмену</button><button className="secondary" disabled={busy} onClick={() => setCancelId('')}>Оставить запись</button></div></div>}
             </article>)}</div>}
         </section>
     </>;

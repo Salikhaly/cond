@@ -1,0 +1,3 @@
+const familyName=name=>String(name||'').replace(/\s+\d+(?:[.,]\d+)?\s*кг.*$/iu,'').trim();
+function productFamilies(products){const groups=new Map();for(const p of products){const name=familyName(p.name),key=name.toLocaleLowerCase('ru').replace(/ё/g,'е');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);}return [...groups.values()].map(items=>{const p=items[0];return {...p,name:familyName(p.name),familyItems:items,kg:items.reduce((n,p)=>n+Number(p.kg||0),0),reservedKg:items.reduce((n,p)=>n+Number(p.reservedKg||0),0),availableKg:items.reduce((n,p)=>n+Number(p.availableKg||0),0),stockVerified:items.every(p=>p.stockVerified!==false),packs:items.flatMap(p=>p.packs||[])};});}
+module.exports={familyName,productFamilies};

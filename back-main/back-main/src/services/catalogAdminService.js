@@ -13,6 +13,7 @@ module.exports={
    if(typeof b.active!=='boolean')throw ApiError.badRequest('Укажите состояние товара');
    const stock=await M.Stock.findByPk(p.id,{transaction:t,lock:t.LOCK.UPDATE});
    if(!b.active){
+    const packs=await M.ProductPack.findAll({where:{productId:p.id},transaction:t}),packStocks=await M.PackStock.findAll({where:{packId:packs.map(x=>x.id)},transaction:t,lock:t.LOCK.UPDATE});if(packStocks.some(s=>Math.abs(Number(s.boxes))>.00001||Math.abs(Number(s.reservedBoxes))>.00001))throw new ApiError(409,'Сначала закройте остатки и резервы коробок');
     if(Math.abs(Number(stock?.kg??p.weightTotal))>.00001||Number(stock?.reservedKg)>0)throw new ApiError(409,'Сначала закройте остаток продукции на складе');
     const returns=await M.GoodsReturn.findAll({where:{status:{[Op.in]:['requested','posted']}},transaction:t});
     for(const r of returns){const line=r.lines.find(l=>l.productId===p.id);if(r.status==='requested'&&(line||r.replacements.some(l=>l.productId===p.id)))throw new ApiError(409,'Есть запрос на возврат или обмен этого товара');if(line&&r.status==='posted'){const done=await M.ReturnDisposition.sum('kg',{where:{returnId:r.id,productId:p.id},transaction:t});if(Number(done||0)<line.kg-.00001)throw new ApiError(409,'Возврат этого товара находится на проверке');}}

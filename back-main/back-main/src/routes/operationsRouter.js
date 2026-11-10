@@ -145,6 +145,9 @@ router.get('/reconciliation', wrap(req => {
 }));
 const trade=require('../services/tradeService');
 router.post('/outlets',wrap(req=>trade.outlet(req.user,req.body)));
+router.get('/assortment/:type/:id',wrap(req=>require('../services/assortmentService').read(req.user,req.params.type,req.params.id)));
+router.put('/assortment/:type/:id',wrap(req=>require('../services/assortmentService').save(req.user,req.params.type,req.params.id,req.body)));
+router.get('/outlets/:id/order-catalog',wrap(req=>require('../services/assortmentService').forOrder(req.user,req.params.id)));
 router.get('/outlets/:id/catalog-link',wrap(req=>require('../services/storeCatalogService').status(req.user,req.params.id)));
 router.post('/outlets/:id/catalog-link',async(req,res,next)=>{try{if(!req.headers['x-operation-id'])throw ApiError.badRequest('Не удалось сохранить номер операции');res.json(await require('../services/storeCatalogService').issue(req.user,req.params.id,req.headers['x-operation-id']));}catch(e){next(e);}});
 router.post('/outlets/:id/catalog-link/revoke',wrap(req=>require('../services/storeCatalogService').revoke(req.user,req.params.id)));
@@ -212,6 +215,8 @@ router.get('/exchange', wrap(async (req, res) => {
     return service.exchange(req.user);
 }));
 
+router.get('/products/duplicates',wrap(req=>require('../services/productDuplicateService').list(req.user)));
+router.post('/products/:id/archive-duplicate',wrap(req=>require('../services/productDuplicateService').archive(req.user,req.params.id,req.body)));
 router.patch('/products/:id', wrap(req => require('../services/catalogAdminService').product(req.user,req.params.id,req.body)));
 router.patch('/recipes/:id', wrap(req => require('../services/catalogAdminService').recipe(req.user,req.params.id,req.body)));
 router.patch('/materials/:id', wrap(req => require('../services/catalogAdminService').material(req.user,req.params.id,req.body)));

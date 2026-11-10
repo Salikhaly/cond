@@ -97,7 +97,9 @@ export default function Orders({ data, user, run, busy, onReturn, initialAction,
     const outlets = data.outlets || [];
     const outlet = outlets.find(o => o.id === outletId);
     const customer = (data.customers || []).find(c => c.id === outlet?.customerId);
-    const catalog = (data.products || []).flatMap(product => (product.packs || []).map(pack => ({ ...product, pack })));
+    const [allowedCatalog,setAllowedCatalog]=useState(null);
+    useEffect(()=>{let live=true;setAllowedCatalog(null);if(outletId)api('/outlets/'+outletId+'/order-catalog').then(rows=>{if(live)setAllowedCatalog(rows);}).catch(()=>{if(live)setAllowedCatalog([]);});return()=>{live=false;};},[outletId,data.products]);
+    const catalog = (outletId?(allowedCatalog||[]):data.products || []).flatMap(product => (product.packs || []).map(pack => ({ ...product, pack })));
     const priceFor=item=>priceForPack({rules:data.clientPrices||[],productId:item.id,pack:item.pack,customerId:outlet?.customerId,outletId:outlet?.id,onDate:deliveryDate,standardPrice:item.salePrice});
     catalog.forEach(item => { item.price = priceFor(item); });
     const lines = Object.entries(cart).filter(([, boxes]) => Number(boxes) > 0).map(([packId, boxes]) => {

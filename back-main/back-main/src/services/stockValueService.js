@@ -93,4 +93,5 @@ async function stocktake(stock,delta,unitCost,id,date,t){
 function extras(d){
   return {costEvents:(d.CostEvent||[]).map(plain),stockValues:(d.Stock||[]).map(s=>({productId:s.productId,kg:Number(s.kg),knownKg:0,value:0,...plain((d.StockValue||[]).find(v=>v.productId===s.productId)||{})}))};
 }
-module.exports={production,shipment,acceptReturn,disposition,stocktake,readData,extras};
+async function cancelProduction(stock,p,event,t){return movement(stock,{kg:Number(event.kg),knownKg:Number(event.knownKg),value:Number(event.value)},false,{id:'cancel-production:'+p.id,kind:'production-cancel',date:today()},t);}
+module.exports={cancelProduction,production,shipment,acceptReturn,disposition,stocktake,readData,extras};

@@ -501,6 +501,7 @@ module.exports = {
     },
     async cancelProduction(user, id) {
         staff(user);
+        const existing=await M.Production.findByPk(id);if(existing?.status==='posted')return require('./productionCancellationService').cancel(user,id);
         return db.transaction(async t => {
             const p = required(await M.Production.findByPk(id, { transaction: t, lock: t.LOCK.UPDATE }), 'Выпуск');
             if (user.role !== 'super_admin' && p.workerId !== user.id) throw ApiError.forbiddenRequest();
@@ -523,6 +524,7 @@ module.exports = {
                 const productId=num(raw.productId,'товар');
                 const product=required(await Product.findByPk(productId,{transaction:t}),'Товар');
                 if(!product.is_active)throw ApiError.badRequest('Товар неактивен');
+                if(target){const rule=await require('./assortmentService').effective(target.outlet,t),display=await M.ProductDisplay.findByPk(product.id,{transaction:t});if(!display?.catalogVisible||!require('./assortmentService').permits(rule,product.id,raw.packId))throw ApiError.badRequest('Товар или фасовка недоступны этому клиенту');}
                 if(raw.packId){
                     const pack=required(await M.ProductPack.findByPk(raw.packId,{transaction:t}),'Тип коробки');
                     if(Number(pack.productId)!==Number(product.id))throw ApiError.badRequest('Коробка относится к другому товару');

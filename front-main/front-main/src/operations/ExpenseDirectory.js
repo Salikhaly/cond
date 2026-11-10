@@ -2,7 +2,7 @@ import React,{useState} from 'react';
 import {api} from './api';
 import {Field,Empty} from './Fields';
 import Icon from './Icon';
-const icons=[['expense','Платёж'],['car','Машина'],['truck','Доставка'],['bolt','Свет'],['water','Вода'],['home','Помещение'],['phone','Связь'],['box','Товары'],['tools','Оборудование'],['team','Команда'],['heart','Личное'],['food','Питание']];
+const icons=[['expense','Платёж'],['car','Машина'],['truck','Доставка'],['bolt','Свет'],['water','Вода'],['home','Помещение'],['phone','Связь'],['box','Товары'],['tools','Оборудование'],['team','Команда'],['heart','Личное'],['food','Питание'],['parking','Парковка'],['fuel','Бензин'],['plate','Тарелка'],['coffee','Кофе']];
 export default function ExpenseDirectory({data,run,busy}){
  const [edit,setEdit]=useState(null),[archive,setArchive]=useState(false),[search,setSearch]=useState('');const rows=data.expenseArticles||[],roots=rows.filter(a=>!a.parentId),open=a=>setEdit({...a});
  const save=()=>run(async()=>{await api('/expense-articles'+(edit.id?'/'+edit.id:''),edit,edit.id?'PATCH':'POST');setEdit(null);},'Статья сохранена');

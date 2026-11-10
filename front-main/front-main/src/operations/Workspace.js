@@ -185,3 +185,4 @@ import './ux-refinement.css';
 import './owner-mobile.css';
 
 import './mobile-type.css';
+import './production-compact.css';
