@@ -30,6 +30,8 @@ module.exports = async () => db.transaction(async t => {
     await db.query('CREATE INDEX IF NOT EXISTS material_receipts_supplier_date_idx ON material_receipts (supplier, date)',{transaction:t});
     await db.query('CREATE INDEX IF NOT EXISTS material_receipts_material_date_idx ON material_receipts ("materialId", date)',{transaction:t});
     await db.query('ALTER TABLE expense_meta ADD COLUMN IF NOT EXISTS "articleId" UUID',{transaction:t});
+    await db.query('ALTER TABLE client_prices ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE, ADD COLUMN IF NOT EXISTS "priceUnavailable" BOOLEAN NOT NULL DEFAULT FALSE',{transaction:t});
+    const [boxCapacityConstraints]=await db.query("SELECT c.conname FROM pg_constraint c JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=c.conkey[1] WHERE c.conrelid='box_rules'::regclass AND c.contype='u' AND array_length(c.conkey,1)=1 AND a.attname='capacityKg'",{transaction:t});for(const c of boxCapacityConstraints)await db.query('ALTER TABLE box_rules DROP CONSTRAINT '+db.getQueryInterface().queryGenerator.quoteIdentifier(c.conname),{transaction:t});
     await require('../services/expenseArticleService').ensure(t);
     await require('../services/moneyService').ensure(t);
     for(const table of ['materials','recipes'])await db.query(`ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE`,{transaction:t});

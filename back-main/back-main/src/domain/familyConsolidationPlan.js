@@ -1,0 +1,3 @@
+function nameFor(name){let base=String(name).replace(/\s+\d+(?:[.,]\d+)?.*$/u,'').trim();if(/^Сочный(?:\s|$)/iu.test(base))base='Сочный';if(base==='Трубочки вафельный')base='Вафельные трубочки';return base;}
+function plan(products){const groups=new Map();for(const p of products){if(!/\d+(?:[.,]\d+)?/.test(p.name))continue;const name=nameFor(p.name),key=name.toLocaleLowerCase('ru').replace(/ё/g,'е');if(!groups.has(key))groups.set(key,{name,ids:[]});groups.get(key).ids.push(p.id);}return {groups:[...groups.values()].map(g=>({...g,ids:g.ids.sort((a,b)=>a-b)})).sort((a,b)=>a.ids[0]-b.ids[0])};}
+module.exports={plan,nameFor};

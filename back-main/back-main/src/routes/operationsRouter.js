@@ -215,6 +215,8 @@ router.get('/exchange', wrap(async (req, res) => {
     return service.exchange(req.user);
 }));
 
+router.post('/products/consolidate/preview',wrap(req=>require('../services/productConsolidationService').preview(req.user,req.body)));
+router.post('/products/consolidate',wrap(req=>require('../services/productConsolidationService').post(req.user,req.body)));
 router.get('/products/duplicates',wrap(req=>require('../services/productDuplicateService').list(req.user)));
 router.post('/products/:id/archive-duplicate',wrap(req=>require('../services/productDuplicateService').archive(req.user,req.params.id,req.body)));
 router.patch('/products/:id', wrap(req => require('../services/catalogAdminService').product(req.user,req.params.id,req.body)));

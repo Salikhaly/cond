@@ -44,6 +44,7 @@ async function catalog(user) {
     const knownPrices=await require('./materialPriceService').known(packagingMaterials);
     const boxRules=await M.BoxRule.findAll();
     const manualRows=await M.LegacyLink.findAll({where:{id:{[Op.like]:'product-manual-cost:%'}}});
+    const familyPolicies=await M.LegacyLink.findAll({where:{id:{[Op.like]:'family-pack:%'}}});
     const manualFor=p=>require('./manualCostService').view(manualRows.find(r=>r.id==='product-manual-cost:'+p.id));
     const packView = p => packs.filter(x=>x.productId===p.id).map(raw=>{const x=require('./boxRuleService').effective(raw,boxRules.find(r=>r.boxMaterialId===raw.boxMaterialId));
         const box=packagingMaterials.find(m=>m.id===x.boxMaterialId),stock=packStocks.find(s=>s.packId===x.id),film=selectFilm(x,packagingMaterials);
@@ -52,10 +53,10 @@ async function catalog(user) {
         const overheadPerBox=recipe?money(Number(recipe.overhead||0)*Number(x.capacityKg)/Number(recipe.outputKg)):Number(x.overheadPerBox||0);
         const pricesKnown=ingredients.every(l=>knownPrices.has(String(l.materialId)))&&knownPrices.has(String(box?.id))&&(!(Number(x.filmQtyM)>0)||knownPrices.has(String(film?.id)));
         const recipeCostPerBox=valid&&pricesKnown&&box?.active&&(!(Number(x.filmQtyM)>0)||film)?round(rawCost+money(Number(box.unitCost))+money(Number(film?.unitCost||0)*Number(x.filmQtyM||0))+Number(x.laborPerBox||0)+overheadPerBox):null;
-        const manual=manualFor(p),costPerBox=manual.manualCostEnabled?(manual.manualCostPerKg==null?null:round(manual.manualCostPerKg*Number(x.capacityKg)+Number(x.laborPerBox||0))):recipeCostPerBox;
+        const manual=require('./familyPackPolicy').resolve(manualFor(p),familyPolicies.find(r=>r.id==='family-pack:'+x.id)),costPerBox=manual.manualCostEnabled?(manual.manualCostPerKg==null?null:round(manual.manualCostPerKg*Number(x.capacityKg)+Number(x.laborPerBox||0))):recipeCostPerBox;
         const fallback=sellingPrices.find(s=>s.productId===p.id)?.price;
         const salePrice=x.salePrice==null?(fallback==null?null:money(Number(fallback)*Number(x.capacityKg))):Number(x.salePrice);
-        return {id:x.id,capacityKg:Number(x.capacityKg),boxMaterialId:x.boxMaterialId,filmMaterialId:film?.id||null,boxName:box?.name||('Коробка '+x.capacityKg+' кг'),filmQtyM:Number(x.filmQtyM||0),salePrice,costPerBox:Number(x.filmQtyM)>0&&!film?null:costPerBox,filmSelectionRequired:Number(x.filmQtyM)>0&&!film,availableBoxes:round(Number(stock?.boxes||0)-Number(stock?.reservedBoxes||0)),boxes:round(stock?.boxes||0),reservedBoxes:round(stock?.reservedBoxes||0),laborPerBox:Number(x.laborPerBox||0),overheadPerBox};
+        return {manualCostEnabled:manual.manualCostEnabled,manualCostPerKg:manual.manualCostPerKg,id:x.id,capacityKg:Number(x.capacityKg),boxMaterialId:x.boxMaterialId,filmMaterialId:film?.id||null,boxName:box?.name||('Коробка '+x.capacityKg+' кг'),filmQtyM:Number(x.filmQtyM||0),salePrice,costPerBox:Number(x.filmQtyM)>0&&!film?null:costPerBox,filmSelectionRequired:Number(x.filmQtyM)>0&&!film,availableBoxes:round(Number(stock?.boxes||0)-Number(stock?.reservedBoxes||0)),boxes:round(stock?.boxes||0),reservedBoxes:round(stock?.reservedBoxes||0),laborPerBox:Number(x.laborPerBox||0),overheadPerBox};
     });
     const used=await M.Production.findAll({where:{status:{[Op.in]:['draft','posted']}},attributes:['productId'],group:['productId']});
     const personal=user.role==='employee'?await require('./workPolicyService').at(user.id,require('./businessDay').today()):null;
@@ -65,19 +66,19 @@ async function catalog(user) {
         if (user.role === 'employee') {
             const rate=personal?.pieceRates?.find(r=>r.productId===p.id),piece=!personal||['piece','monthly_piece','shift_piece'].includes(personal.mode),pack=variants.find(v=>v.productId===p.id);
             const perKg=rate?Number(rate.rate)/(rate.unit==='pack'?Number(packKg):1):profile?.individualRate!=null?Number(profile.individualRate):pack?Number(pack.laborPerPack)/Number(pack.kgPerPack):Number(p.priceForEmployee);
-            return {id:p.id,name:p.name,weight:p.weight,packKg,packs:packView(p).map(x=>({...x,costPerBox:undefined,overheadPerBox:undefined,salePrice:undefined,payPerBox:piece?(!rate&&Number(personal?.boxRate)>0?Number(personal.boxRate):rate||profile?.individualRate!=null?round(perKg*x.capacityKg):Number(x.laborPerBox)):null})),wageMode:personal?.mode||'piece',payRateForKg:piece&&(!Number(personal?.boxRate)||rate)?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
+            return {id:p.id,name:p.name,weight:p.weight,packKg,packs:packView(p).map(x=>({...x,costPerBox:undefined,overheadPerBox:undefined,salePrice:undefined,manualCostEnabled:undefined,manualCostPerKg:undefined,payPerBox:piece?(!rate&&Number(personal?.boxRate)>0?Number(personal.boxRate):rate||profile?.individualRate!=null?round(perKg*x.capacityKg):Number(x.laborPerBox)):null})),wageMode:personal?.mode||'piece',payRateForKg:piece&&(!Number(personal?.boxRate)||rate)?perKg:null,payPerPack:piece&&pack?(rate?Number(rate.rate)*(rate.unit==='pack'?1:Number(packKg)):perKg*Number(packKg)):null};
         }
         const s = stocks.find(s => s.productId === p.id);
         const display=displays.find(d=>d.productId===p.id);
         const common = {allowNegativeStock:allowNegative(),stockVerified:p.additional?.stockVerified!==false||stockCounts.some(c=>c.lines.some(l=>l.kind==='product'&&Number(l.itemId)===p.id)), packKg,packs:packView(p),salePrice:sellingPrices.find(x=>x.productId===p.id)?.price ?? null,id: p.id, name: p.name, weight: p.weight, photo:'',hasPhoto:Boolean(display?.hasPhoto),photoVersion:Number(display?.photoVersion||0),photoUrl:display?.hasPhoto?'/api/operations/products/'+p.id+'/photo?v='+Number(display.photoVersion||0):'',catalogGroup:display?.catalogGroup||'',catalogVisible:display?.catalogVisible===true,sortOrder:Number(display?.sortOrder||0), description:display?.description || '', image:p.image || '', availableKg: round(Number(s.kg) - Number(s.reservedKg)) };
-        if (user.role === 'representative') return {...common,packs:common.packs.map(({costPerBox,laborPerBox,overheadPerBox,...safe})=>safe)};
+        if (user.role === 'representative') return {...common,packs:common.packs.map(({costPerBox,laborPerBox,overheadPerBox,manualCostEnabled,manualCostPerKg,...safe})=>safe)};
         return { ...common,...manualFor(p),wageRateLocked:used.some(x=>x.productId===p.id), packLaborPerPack:variants.find(v=>v.productId===p.id)?.laborPerPack??null,kg: s.kg, reservedKg: s.reservedKg, priceForEmployee: p.priceForEmployee };
     });
 }
 
 async function calculate(productId, kg, tx, workerId, workDate, packId, inputBoxes) {
     const product = required(await Product.findByPk(productId, { transaction: tx }), 'Товар');
-    const manual=await require('./manualCostService').get(productId,tx);
+    const manual=await require('./familyPackPolicy').get(productId,packId,tx);
     const savedRecipe=await M.Recipe.findOne({where:{productId,active:true},transaction:tx});
     const recipe=savedRecipe||(manual.manualCostEnabled?{outputKg:1,overhead:0,lines:[],version:0}:required(null,'Рецептура'));
     if(!product.is_active)throw ApiError.badRequest('Товар в архиве');
@@ -125,7 +126,8 @@ async function calculate(productId, kg, tx, workerId, workDate, packId, inputBox
     const policy=workerId?await require('./workPolicyService').at(workerId,workDate||require('./businessDay').today(),tx):null;
     const profile=workerId?await M.WorkProfile.findByPk(workerId,{transaction:tx}):null;
     const piece=!policy||['piece','monthly_piece','shift_piece'].includes(policy.mode);
-    const personalRate=policy?.pieceRates?.find(r=>r.productId===product.id);
+    const familySource=packId?await M.LegacyLink.findByPk('family-pack:'+packId,{transaction:tx}):null;
+    const personalRate=policy?.pieceRates?.find(r=>r.productId===product.id)||policy?.pieceRates?.find(r=>r.productId===familySource?.data?.sourceProductId);
     const personalPerKg=personalRate?Number(personalRate.rate)/(personalRate.unit==='pack'?Number(variant?.kgPerPack||product.weight):1):null;
     const profileRate=profile?.individualRate!=null?Number(profile.individualRate):null;
     const effectiveRate=personalPerKg!=null?personalPerKg:profileRate!=null?profileRate:null;

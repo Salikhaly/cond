@@ -6,6 +6,7 @@ const round=n=>Math.round((n+Number.EPSILON)*10000)/10000;
 function productCostSummary(product,data,packId){
  const recipe=(data.recipes||[]).find(r=>String(r.productId)===String(product.id)&&r.active!==false);
  const pack=(product.packs||[]).find(p=>String(p.id)===String(packId))||(product.packs||[])[0];
+ if(pack?.manualCostEnabled!==undefined)product={...product,manualCostEnabled:pack.manualCostEnabled,manualCostPerKg:pack.manualCostPerKg};
  const kg=Number(pack?.capacityKg||1),materials=data.materials||[],issues=[];
  if(product.manualCostEnabled){
   const rate=product.manualCostPerKg,known=rate!==null&&rate!==undefined&&rate!==''&&Number.isFinite(Number(rate)),ingredients=known?round(Number(rate)*kg):0,labor=pack?Number(pack.laborPerBox||0):Number(product.packKg)>0&&product.packLaborPerPack!=null?Number(product.packLaborPerPack)/Number(product.packKg):Number(product.priceForEmployee||0),total=round(ingredients+labor),salePrice=pack?pack.salePrice:product.salePrice;
