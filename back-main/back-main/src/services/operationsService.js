@@ -439,8 +439,10 @@ module.exports = {
         const product = required(await Product.findByPk(num(b.productId, 'товар')), 'Товар');
         if (!product.is_active) throw ApiError.badRequest('Товар неактивен');
         const create=async transaction => {
+            const fresh=await Product.findByPk(product.id,{transaction,lock:transaction.LOCK.UPDATE});if(!fresh?.is_active)throw new ApiError(409,'Товар изменён. Обновите список товаров');
             if (b.packId) {
                 const pack = required(await M.ProductPack.findByPk(b.packId, { transaction }), 'Тип коробки');
+                if(!pack.active)throw new ApiError(409,'Упаковка изменена. Обновите список коробок');
                 if (Number(pack.productId) !== Number(product.id)) throw ApiError.badRequest('Коробка относится к другому товару');
                 const boxes = num(b.boxes, 'количество коробок');
                 if (Math.abs(boxes - Math.round(boxes)) > 1e-7) throw ApiError.badRequest('Укажите целое число коробок');
@@ -524,11 +526,12 @@ module.exports = {
             const lines=[];
             for(const raw of b.lines){
                 const productId=num(raw.productId,'товар');
-                const product=required(await Product.findByPk(productId,{transaction:t}),'Товар');
+                const product=required(await Product.findByPk(productId,{transaction:t,lock:t.LOCK.UPDATE}),'Товар');
                 if(!product.is_active)throw ApiError.badRequest('Товар неактивен');
                 if(target){const rule=await require('./assortmentService').effective(target.outlet,t),display=await M.ProductDisplay.findByPk(product.id,{transaction:t});if(!display?.catalogVisible||!require('./assortmentService').permits(rule,product.id,raw.packId))throw ApiError.badRequest('Товар или фасовка недоступны этому клиенту');}
                 if(raw.packId){
                     const pack=required(await M.ProductPack.findByPk(raw.packId,{transaction:t}),'Тип коробки');
+                    if(!pack.active)throw new ApiError(409,'Упаковка изменена. Обновите список коробок');
                     if(Number(pack.productId)!==Number(product.id))throw ApiError.badRequest('Коробка относится к другому товару');
                     const boxes=num(raw.boxes,'количество коробок');
                     if(Math.abs(boxes-Math.round(boxes))>1e-7)throw ApiError.badRequest('Коробки — целое число');
